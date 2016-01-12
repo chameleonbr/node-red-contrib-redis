@@ -1,0 +1,40 @@
+{
+    "name": "node-red-contrib-redis",
+    "version": "0.0.1",
+    "description": "Node Red client for Redis with pub/sub, list and other commands support.",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/chameleonbr/node-red-contrib-redis.git"
+    },
+    "keywords": [
+        "redis",
+        "node-red",
+        "node"
+    ],
+    "node-red": {
+        "nodes": {
+            "redis": "redis.js"
+        }
+    },
+    "author": {
+        "name": "Andre Alexandre Avila"
+    },
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/chameleonbr/node-red-contrib-redis/issues"
+    },
+    "homepage": "https://github.com/chameleonbr/node-red-contrib-redis#readme",
+    "dependencies": {
+        "redis": "^2.4.2"
+    },
+    "maintainers": [
+        {
+            "name": "chameleonbr",
+            "email": "chameleonbr@gmail.com"
+        }
+    ]
+}
