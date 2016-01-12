@@ -45,11 +45,9 @@ module.exports = function (RED) {
         });
 
         client.select(node.server.dbase, function () {
-
             var topics = node.topic.split(' ');
-            topics.push(node.timeout);
-
             if (node.command !== "psubscribe" && node.command !== "subscribe") {
+                topics.push(node.timeout);
                 sto = setInterval(function () {
                     client[node.command](topics, function (err, data) {
                         if (err) {
