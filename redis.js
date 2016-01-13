@@ -20,11 +20,12 @@ module.exports = function (RED) {
         this.name = n.name;
         this.topic = n.topic;
         this.timeout = n.timeout;
+        this.sto = null;
+        this.topics = [];
+        this.client = connect(n.server, true);
         var node = this;
-        var sto = null;
-        var client = connect(node.server, true);
 
-        client.on('error', function (err) {
+        node.client.on('error', function (err) {
             if (err) {
                 node.error(err);
             }
@@ -32,24 +33,40 @@ module.exports = function (RED) {
 
         node.on('close', function (done) {
             if (node.command === "psubscribe") {
-                client.punsubscribe();
+                node.client.punsubscribe();
             } else if (node.command === "subscribe") {
-                client.unsubscribe();
+                node.client.unsubscribe();
             }
-            if (sto !== null) {
-                clearInterval(sto);
+            if (node.sto !== null) {
+                clearInterval(node.sto);
+                node.sto = null;
             }
             node.status({});
-            client.end();
+            node.client.end();
+            node.topics = [];
             done();
         });
-
-        client.select(node.server.dbase, function () {
-            var topics = node.topic.split(' ');
-            if (node.command !== "psubscribe" && node.command !== "subscribe") {
-                topics.push(node.timeout);
-                sto = setInterval(function () {
-                    client[node.command](topics, function (err, data) {
+        
+        node.client.select(node.server.dbase, function () {
+            node.topics = node.topic.split(' ');
+            if (node.command === "psubscribe" || node.command === "subscribe") {   
+                node.client.on('subscribe', function (channel, count) {
+                    node.status({fill: "green", shape: "dot", text: "connected"});
+                });
+                node.client.on('psubscribe', function (channel, count) {
+                    node.status({fill: "green", shape: "dot", text: "connected"});
+                });
+                node.client.on('pmessage', function (pattern, channel, message) {
+                    node.send({pattern:pattern, topic: channel, payload: JSON.parse(message)});
+                });
+                node.client.on('message', function (channel, message) {
+                    node.send({topic: channel, payload: JSON.parse(message)});
+                });
+                node.client[node.command](node.topics);
+            } else {
+               node.topics.push(node.timeout);
+                node.sto = setInterval(function () {
+                    node.client[node.command](node.topics, function (err, data) {
                         if (err) {
                             node.error(err);
                         }
@@ -57,14 +74,6 @@ module.exports = function (RED) {
                     });
                 }, 100);
                 node.status({fill: "green", shape: "dot", text: "connected"});
-            } else {
-                client.on('subscribe', function (channel, count) {
-                    node.status({fill: "green", shape: "dot", text: "connected"});
-                });
-                client.on('message', function (channel, message) {
-                    node.send({payload: JSON.parse(message)});
-                });
-                client[node.command](topics);
             }
         });
     }
