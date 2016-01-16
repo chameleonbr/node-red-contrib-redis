@@ -22,7 +22,7 @@ module.exports = function (RED) {
         this.timeout = n.timeout;
         this.sto = null;
         this.topics = [];
-        this.client = connect(n.server, true);
+        this.client = connect(this.server, true);
         var node = this;
 
         node.client.on('error', function (err) {
