@@ -46,10 +46,10 @@ module.exports = function (RED) {
             node.topics = [];
             done();
         });
-        
+
         node.client.select(node.server.dbase, function () {
             node.topics = node.topic.split(' ');
-            if (node.command === "psubscribe" || node.command === "subscribe") {   
+            if (node.command === "psubscribe" || node.command === "subscribe") {
                 node.client.on('subscribe', function (channel, count) {
                     node.status({fill: "green", shape: "dot", text: "connected"});
                 });
@@ -149,7 +149,8 @@ module.exports = function (RED) {
                     if (err) {
                         node.error(err);
                     }
-                    node.send({payload: res});
+                    msg.payload = res;
+                    node.send(msg);
                 });
             });
         });
