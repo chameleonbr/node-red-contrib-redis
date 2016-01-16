@@ -89,12 +89,6 @@ module.exports = function (RED) {
 
         var client = connect(node.server);
 
-        client.on('error', function (err) {
-            if (err) {
-                node.error(err);
-            }
-        });
-
         node.on('close', function (done) {
             node.status({});
             disconnect(node.server);
@@ -126,12 +120,6 @@ module.exports = function (RED) {
         var node = this;
 
         var client = connect(node.server);
-
-        client.on('error', function (err) {
-            if (err) {
-                node.error(err);
-            }
-        });
 
         node.on('close', function (done) {
             node.status({});
@@ -169,6 +157,9 @@ module.exports = function (RED) {
                 options['auth_pass'] = config.pass;
             }
             var conn = redis.createClient(config.port, config.host, options);
+            conn.on('error', function (err) {
+                console.log('[redis]', err);
+            })
             if (force !== undefined && force === true) {
                 return conn;
             } else {
