@@ -27,6 +27,7 @@ module.exports = function (RED) {
 
         node.client.on('error', function (err) {
             if (err) {
+                clearInterval(node.sto);
                 node.error(err);
             }
         });
@@ -69,8 +70,13 @@ module.exports = function (RED) {
                     node.client[node.command](node.topics, function (err, data) {
                         if (err) {
                             node.error(err);
+                        }else{
+                            if(data !== null && data.length == 2){
+                                node.send({payload: JSON.parse(data[1])});
+                            }else{
+                                node.send({payload: null});
+                            }
                         }
-                        node.send({payload: JSON.parse(data[1])});
                     });
                 }, 100);
                 node.status({fill: "green", shape: "dot", text: "connected"});
