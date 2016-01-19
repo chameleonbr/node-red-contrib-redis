@@ -22,7 +22,7 @@ module.exports = function (RED) {
         this.timeout = n.timeout;
         this.sto = null;
         this.topics = [];
-        this.client = connect(n.server, true);
+        this.client = connect(this.server, true);
         var node = this;
 
         node.client.on('error', function (err) {
@@ -46,10 +46,10 @@ module.exports = function (RED) {
             node.topics = [];
             done();
         });
-        
+
         node.client.select(node.server.dbase, function () {
             node.topics = node.topic.split(' ');
-            if (node.command === "psubscribe" || node.command === "subscribe") {   
+            if (node.command === "psubscribe" || node.command === "subscribe") {
                 node.client.on('subscribe', function (channel, count) {
                     node.status({fill: "green", shape: "dot", text: "connected"});
                 });
@@ -89,12 +89,6 @@ module.exports = function (RED) {
 
         var client = connect(node.server);
 
-        client.on('error', function (err) {
-            if (err) {
-                node.error(err);
-            }
-        });
-
         node.on('close', function (done) {
             node.status({});
             disconnect(node.server);
@@ -127,12 +121,6 @@ module.exports = function (RED) {
 
         var client = connect(node.server);
 
-        client.on('error', function (err) {
-            if (err) {
-                node.error(err);
-            }
-        });
-
         node.on('close', function (done) {
             node.status({});
             disconnect(node.server);
@@ -149,7 +137,8 @@ module.exports = function (RED) {
                     if (err) {
                         node.error(err);
                     }
-                    node.send({payload: res});
+                    msg.payload = res;
+                    node.send(msg);
                 });
             });
         });
@@ -168,6 +157,9 @@ module.exports = function (RED) {
                 options['auth_pass'] = config.pass;
             }
             var conn = redis.createClient(config.port, config.host, options);
+            conn.on('error', function (err) {
+                console.log('[redis]', err);
+            })
             if (force !== undefined && force === true) {
                 return conn;
             } else {
