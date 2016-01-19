@@ -96,7 +96,7 @@ module.exports = function (RED) {
         });
 
         node.on('input', function (msg) {
-
+            var topic;
             if (msg.topic !== undefined && msg.topic !== "") {
                 topic = msg.topic;
             } else {
