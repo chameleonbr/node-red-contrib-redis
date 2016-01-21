@@ -1,5 +1,12 @@
 # node-red-contrib-redis
-Node Red client for Redis with pub/sub, list and other commands support.
+Node Red client for Redis with pub/sub, list, lua scripting and other commands support.
+
+Lua scripts first version, examples soon.
+Known issues:
+- Not open or save to the library
+- Syntax highlight not working
+ 
+
 
 Please test and make feedback.
 

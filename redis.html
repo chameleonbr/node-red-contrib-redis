@@ -1,13 +1,29 @@
 <script type="text/javascript">
+    "use strict";
+    /*global RED*/
     RED.nodes.registerType('redis-config', {
         category: 'config',
         defaults: {
-            host: {value: "localhost", required: true},
-            port: {value: 6379, required: true, validate: RED.validators.number()},
-            dbase: {value: 0, required: true, validate: RED.validators.number()},
-            pass: {value: "", required: false}
+            host: {
+                value: "localhost",
+                required: true
+            },
+            port: {
+                value: 6379,
+                required: true,
+                validate: RED.validators.number()
+            },
+            dbase: {
+                value: 0,
+                required: true,
+                validate: RED.validators.number()
+            },
+            pass: {
+                value: "",
+                required: false
+            }
         },
-        label: function () {
+        label: function() {
             return this.host + ":" + this.port;
         }
     });
@@ -33,20 +49,34 @@
 </script>
 
 <script type="text/javascript">
+    /*global RED*/
     RED.nodes.registerType('redis-in', {
         category: 'input',
         outputs: 1,
         color: "#ffaaaa",
         icon: "redis.png",
-	paletteLabel:"redis in",
+        paletteLabel: "redis in",
         defaults: {
-            server: {value: "", type: "redis-config"},
-            command: {value: "blpop"},
-            name: {value: ""},
-            topic: {value: "", required:true},
-            timeout: {value: 0, validate: RED.validators.number()}
+            server: {
+                value: "",
+                type: "redis-config"
+            },
+            command: {
+                value: "blpop"
+            },
+            name: {
+                value: ""
+            },
+            topic: {
+                value: "",
+                required: true
+            },
+            timeout: {
+                value: 0,
+                validate: RED.validators.number()
+            }
         },
-        label: function () {
+        label: function() {
             return this.name || "Redis IN";
         }
     });
@@ -69,7 +99,7 @@
         <label for="node-input-command"><i class="fa fa-unlock"></i> Method</label>
         <select id="node-input-command">
             <option value="blpop" selected>BLPOP</option>
-            <option value="brpop" >BRPOP</option>
+            <option value="brpop">BRPOP</option>
             <option value="subscribe">SUBSCRIBE</option>
             <option value="psubscribe">PSUBSCRIBE</option>
         </select>
@@ -89,6 +119,7 @@
 
 
 <script type="text/javascript">
+    /*global RED*/
     RED.nodes.registerType('redis-out', {
         category: 'output',
         inputs: 1,
@@ -96,14 +127,23 @@
         color: "#ffaaaa",
         icon: "redis.png",
         align: "right",
-	paletteLabel: "redis out",
+        paletteLabel: "redis out",
         defaults: {
-            server: {value: "", type: "redis-config"},
-            command: {value: "rpush"},
-            name: {value: ""},
-            topic: {value: ""}
+            server: {
+                value: "",
+                type: "redis-config"
+            },
+            command: {
+                value: "rpush"
+            },
+            name: {
+                value: ""
+            },
+            topic: {
+                value: ""
+            }
         },
-        label: function () {
+        label: function() {
             return this.name || "Redis OUT";
         }
     });
@@ -142,21 +182,31 @@
 </script>
 
 <script type="text/javascript">
+    /*global RED*/
     RED.nodes.registerType('redis-command', {
         category: 'function',
         inputs: 1,
         outputs: 1,
         color: "#ffaaaa",
         icon: "redis.png",
-	paletteLabel:"redis cmd",
+        paletteLabel: "redis cmd",
         defaults: {
-            server: {value: "", type: "redis-config"},
-            command: {value: "set"},
-            name: {value: ""},
-            topic: {value: ""}
+            server: {
+                value: "",
+                type: "redis-config"
+            },
+            command: {
+                value: "set"
+            },
+            name: {
+                value: ""
+            },
+            topic: {
+                value: ""
+            }
         },
-        label: function () {
-            return 'Redis '+ this.command || "Redis CMD";
+        label: function() {
+            return this.name || "Redis " + this.command;
         }
     });
 </script>
@@ -352,6 +402,119 @@
 </script>
 
 <script type="text/x-red" data-help-name="redis-command">
+    <p>Redis Command</p>
+    <p>Execute command inside Redis sending payload array as parameters and return the result as payload.</p>
+</script>
+
+
+<script type="text/javascript">
+    /*global RED*/
+    RED.nodes.registerType('redis-lua-script', {
+        category: 'function',
+        inputs: 1,
+        outputs: 1,
+        color: "#ffaaaa",
+        icon: "redis.png",
+        paletteLabel: "redis lua",
+        defaults: {
+            server: {
+                value: "",
+                type: "redis-config"
+            },
+            name: {
+                value: ""
+            },
+            keyval: {
+                value: 0,
+                validate: RED.validators.number()
+            },
+            func: {
+                value: "\nreturn nil"
+            },
+            stored: {
+                value: false
+            }
+        },
+        label: function() {
+            return this.name || "Redis Lua";
+        },
+        oneditprepare: function() {
+            var that = this;
+            $("#node-input-keyval").spinner({
+                min: 0
+            });
+            this.editor = RED.editor.createEditor({
+                id: 'node-input-func-editor',
+                mode: 'ace/mode/lua',
+                value: $("#node-input-func").val()
+            });
+            RED.library.create({
+                url: "functions", // where to get the data from
+                type: "function.lua", // the type of object the library is for
+                editor: this.editor, // the field name the main text body goes to
+                mode: "ace/mode/lua",
+                fields: ['name', 'keyval', 'stored']
+            });
+            this.editor.focus();
+        },
+        oneditsave: function() {
+            var annot = this.editor.getSession().getAnnotations();
+            this.noerr = 0;
+            $("#node-input-noerr").val(0);
+            for (var k = 0; k < annot.length; k++) {
+                //console.log(annot[k].type,":",annot[k].text, "on line", annot[k].row);
+                if (annot[k].type === "error") {
+                    $("#node-input-noerr").val(annot.length);
+                    this.noerr = annot.length;
+                }
+            }
+            $("#node-input-func").val(this.editor.getValue());
+            delete this.editor;
+        },
+        oneditresize: function(size) {
+            var rows = $("#dialog-form>div:not(.node-text-editor-row)");
+            var height = $("#dialog-form").height();
+            for (var i = 0; i < rows.size(); i++) {
+                height -= $(rows[i]).outerHeight(true);
+            }
+            var editorRow = $("#dialog-form>div.node-text-editor-row");
+            height -= (parseInt(editorRow.css("marginTop")) + parseInt(editorRow.css("marginBottom")));
+            $(".node-text-editor").css("height", height + "px");
+            this.editor.resize();
+        }
+    });
+</script>
+
+<script type="text/x-red" data-template-name="redis-lua-script">
+    <div class="form-row">
+        <label for="node-input-server"><i class="fa fa-globe"></i> Server</label>
+        <input type="text" id="node-input-server" placeholder="Server">
+    </div>
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    
+    <div class="form-row">
+        <label>&nbsp;</label>
+        <input type="checkbox" id="node-input-stored" style="display: inline-block; width: auto; vertical-align: top;">
+        <label for="node-input-stored" style="width: 70%;">Stored Script</label>
+    </div>
+    <div class="form-row">
+        <label for="node-input-keyval"><i class="fa fa-random"></i> Keys</label>
+        <input id="node-input-keyval" style="width: 60px; height: 1.7em;" value="0">
+    </div>
+    <div class="form-row" style="margin-bottom: 0px;">
+        <label for="node-input-func"><i class="fa fa-wrench"></i> Lua Script</label>
+        <input type="hidden" id="node-input-func" autofocus="autofocus">
+        <input type="hidden" id="node-input-noerr">
+    </div>
+    <div class="form-row node-text-editor-row">
+        <div style="height: 250px;" class="node-text-editor" id="node-input-func-editor"></div>
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="redis-lua-script">
     <p>Redis Command</p>
     <p>Execute command inside Redis sending payload array as parameters and return the result as payload.</p>
 </script>
