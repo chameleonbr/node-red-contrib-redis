@@ -15,7 +15,6 @@ module.exports = function(RED) {
 
     function RedisIn(n) {
         RED.nodes.createNode(this, n);
-
         this.server = RED.nodes.getNode(n.server);
         this.command = n.command;
         this.name = n.name;
@@ -204,7 +203,7 @@ module.exports = function(RED) {
         });
         if (node.stored) {
             client.select(node.server.dbase, function() {
-                client.script('load',node.func, function(err, res) {
+                client.script('load', node.func, function(err, res) {
                     if (err) {
                         node.status({
                             fill: "red",
@@ -235,7 +234,8 @@ module.exports = function(RED) {
                 if (node.stored) {
                     node.command = "evalsha";
                     args = [node.sha1, node.keyval].concat(msg.payload);
-                }else{
+                }
+                else {
                     args = [node.func, node.keyval].concat(msg.payload);
                 }
                 client[node.command](args, function(err, res) {

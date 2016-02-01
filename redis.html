@@ -24,7 +24,7 @@
             }
         },
         label: function() {
-            return this.host + ":" + this.port;
+            return this.host + ":" + this.port + "/" + this.dbase;
         }
     });
 </script>
@@ -515,6 +515,11 @@
 </script>
 
 <script type="text/x-red" data-help-name="redis-lua-script">
-    <p>Redis Command</p>
-    <p>Execute command inside Redis sending payload array as parameters and return the result as payload.</p>
+    <p>Redis Lua</p>
+    <p>Execute lua script inside Redis sending payload array as parameters and return the result as payload.</p>
+    <p>Options</p>
+    <p>Stored: Set if you want use SCRIPT LOAD and EVALSHA to run script</p>
+    <p>Keys: Number of keys that you send to the lua script</p>
+    <p>Script: Lua script</p>
+    <p>Payload: you need send all keys before, after send all values.</p>
 </script>
