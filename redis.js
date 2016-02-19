@@ -67,17 +67,35 @@ module.exports = function(RED) {
                     });
                 });
                 node.client.on('pmessage', function(pattern, channel, message) {
-                    node.send({
-                        pattern: pattern,
-                        topic: channel,
-                        payload: JSON.parse(message)
-                    });
+                    var payload = null;
+                    try {
+                        payload = JSON.parse(message);
+                    }
+                    catch (err) {
+                        payload = message;
+                    }
+                    finally {
+                        node.send({
+                            pattern: pattern,
+                            topic: channel,
+                            payload: payload
+                        });
+                    }
                 });
                 node.client.on('message', function(channel, message) {
-                    node.send({
-                        topic: channel,
-                        payload: JSON.parse(message)
-                    });
+                    var payload = null;
+                    try {
+                        payload = JSON.parse(message);
+                    }
+                    catch (err) {
+                        payload = message;
+                    }
+                    finally {
+                        node.send({
+                            topic: channel,
+                            payload: payload
+                        });
+                    }
                 });
                 node.client[node.command](node.topics);
             }
@@ -90,9 +108,18 @@ module.exports = function(RED) {
                         }
                         else {
                             if (data !== null && data.length == 2) {
-                                node.send({
-                                    payload: JSON.parse(data[1])
-                                });
+                                var payload = null;
+                                try {
+                                    payload = JSON.parse(data[1]);
+                                }
+                                catch (err) {
+                                    payload = data[1];
+                                }
+                                finally {
+                                    node.send({
+                                        payload: payload
+                                    });
+                                }
                             }
                             else {
                                 node.send({
@@ -136,9 +163,14 @@ module.exports = function(RED) {
             else {
                 topic = node.topic;
             }
-            client.select(node.server.dbase, function() {
-                client[node.command](topic, JSON.stringify(msg.payload));
-            });
+            try {
+                client.select(node.server.dbase, function() {
+                    client[node.command](topic, JSON.stringify(msg.payload));
+                });
+            }
+            catch (err) {
+                node.error(err);
+            }
         });
 
     }
