@@ -9,12 +9,12 @@
                 required: true
             },
             port: {
-                value: 6379,
+                value: "6379",
                 required: true,
                 validate: RED.validators.number()
             },
             dbase: {
-                value: 0,
+                value: "0",
                 required: true,
                 validate: RED.validators.number()
             },
@@ -68,8 +68,7 @@
                 value: ""
             },
             topic: {
-                value: "",
-                required: true
+                value: ""
             },
             timeout: {
                 value: 0,

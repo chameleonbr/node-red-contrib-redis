@@ -49,93 +49,91 @@ module.exports = function(RED) {
             done();
         });
 
-        node.client.select(node.server.dbase, function() {
-            node.topics = node.topic.split(' ');
-            if (node.command === "psubscribe" || node.command === "subscribe") {
-                node.client.on('subscribe', function(channel, count) {
-                    node.status({
-                        fill: "green",
-                        shape: "dot",
-                        text: "connected"
-                    });
-                });
-                node.client.on('psubscribe', function(channel, count) {
-                    node.status({
-                        fill: "green",
-                        shape: "dot",
-                        text: "connected"
-                    });
-                });
-                node.client.on('pmessage', function(pattern, channel, message) {
-                    var payload = null;
-                    try {
-                        payload = JSON.parse(message);
-                    }
-                    catch (err) {
-                        payload = message;
-                    }
-                    finally {
-                        node.send({
-                            pattern: pattern,
-                            topic: channel,
-                            payload: payload
-                        });
-                    }
-                });
-                node.client.on('message', function(channel, message) {
-                    var payload = null;
-                    try {
-                        payload = JSON.parse(message);
-                    }
-                    catch (err) {
-                        payload = message;
-                    }
-                    finally {
-                        node.send({
-                            topic: channel,
-                            payload: payload
-                        });
-                    }
-                });
-                node.client[node.command](node.topics);
-            }
-            else {
-                node.topics.push(node.timeout);
-                node.sto = setInterval(function() {
-                    node.client[node.command](node.topics, function(err, data) {
-                        if (err) {
-                            node.error(err);
-                        }
-                        else {
-                            if (data !== null && data.length == 2) {
-                                var payload = null;
-                                try {
-                                    payload = JSON.parse(data[1]);
-                                }
-                                catch (err) {
-                                    payload = data[1];
-                                }
-                                finally {
-                                    node.send({
-                                        payload: payload
-                                    });
-                                }
-                            }
-                            else {
-                                node.send({
-                                    payload: null
-                                });
-                            }
-                        }
-                    });
-                }, 100);
+        node.topics = node.topic.split(' ');
+        if (node.command === "psubscribe" || node.command === "subscribe") {
+            node.client.on('subscribe', function(channel, count) {
                 node.status({
                     fill: "green",
                     shape: "dot",
                     text: "connected"
                 });
-            }
-        });
+            });
+            node.client.on('psubscribe', function(channel, count) {
+                node.status({
+                    fill: "green",
+                    shape: "dot",
+                    text: "connected"
+                });
+            });
+            node.client.on('pmessage', function(pattern, channel, message) {
+                var payload = null;
+                try {
+                    payload = JSON.parse(message);
+                }
+                catch (err) {
+                    payload = message;
+                }
+                finally {
+                    node.send({
+                        pattern: pattern,
+                        topic: channel,
+                        payload: payload
+                    });
+                }
+            });
+            node.client.on('message', function(channel, message) {
+                var payload = null;
+                try {
+                    payload = JSON.parse(message);
+                }
+                catch (err) {
+                    payload = message;
+                }
+                finally {
+                    node.send({
+                        topic: channel,
+                        payload: payload
+                    });
+                }
+            });
+            node.client[node.command](node.topics);
+        }
+        else {
+            node.topics.push(node.timeout);
+            node.sto = setInterval(function() {
+                node.client[node.command](node.topics, function(err, data) {
+                    if (err) {
+                        node.error(err);
+                    }
+                    else {
+                        if (data !== null && data.length == 2) {
+                            var payload = null;
+                            try {
+                                payload = JSON.parse(data[1]);
+                            }
+                            catch (err) {
+                                payload = data[1];
+                            }
+                            finally {
+                                node.send({
+                                    payload: payload
+                                });
+                            }
+                        }
+                        else {
+                            node.send({
+                                payload: null
+                            });
+                        }
+                    }
+                });
+            }, 100);
+            node.status({
+                fill: "green",
+                shape: "dot",
+                text: "connected"
+            });
+        }
     }
     RED.nodes.registerType("redis-in", RedisIn);
 
@@ -164,9 +162,7 @@ module.exports = function(RED) {
                 topic = node.topic;
             }
             try {
-                client.select(node.server.dbase, function() {
-                    client[node.command](topic, JSON.stringify(msg.payload));
-                });
+                client[node.command](topic, JSON.stringify(msg.payload));
             }
             catch (err) {
                 node.error(err);
@@ -198,16 +194,14 @@ module.exports = function(RED) {
                 throw Error('Payload is not Array');
             }
 
-            client.select(node.server.dbase, function() {
-                client[node.command](msg.payload, function(err, res) {
-                    if (err) {
-                        node.error(err, msg);
-                    }
-                    else {
-                        msg.payload = res;
-                        node.send(msg);
-                    }
-                });
+            client[node.command](msg.payload, function(err, res) {
+                if (err) {
+                    node.error(err, msg);
+                }
+                else {
+                    msg.payload = res;
+                    node.send(msg);
+                }
             });
         });
 
@@ -234,25 +228,23 @@ module.exports = function(RED) {
             done();
         });
         if (node.stored) {
-            client.select(node.server.dbase, function() {
-                client.script('load', node.func, function(err, res) {
-                    if (err) {
-                        node.status({
-                            fill: "red",
-                            shape: "dot",
-                            text: "script not loaded"
-                        });
-                    }
-                    else {
-                        node.status({
-                            fill: "green",
-                            shape: "dot",
-                            text: "script loaded"
-                        });
-                        console.log(res);
-                        node.sha1 = res;
-                    }
-                });
+            client.script('load', node.func, function(err, res) {
+                if (err) {
+                    node.status({
+                        fill: "red",
+                        shape: "dot",
+                        text: "script not loaded"
+                    });
+                }
+                else {
+                    node.status({
+                        fill: "green",
+                        shape: "dot",
+                        text: "script loaded"
+                    });
+                    console.log(res);
+                    node.sha1 = res;
+                }
             });
         }
 
@@ -261,24 +253,22 @@ module.exports = function(RED) {
                 throw Error('Payload is not Array');
             }
 
-            client.select(node.server.dbase, function() {
-                var args = null;
-                if (node.stored) {
-                    node.command = "evalsha";
-                    args = [node.sha1, node.keyval].concat(msg.payload);
+            var args = null;
+            if (node.stored) {
+                node.command = "evalsha";
+                args = [node.sha1, node.keyval].concat(msg.payload);
+            }
+            else {
+                args = [node.func, node.keyval].concat(msg.payload);
+            }
+            client[node.command](args, function(err, res) {
+                if (err) {
+                    node.error(err, msg);
                 }
                 else {
-                    args = [node.func, node.keyval].concat(msg.payload);
+                    msg.payload = res;
+                    node.send(msg);
                 }
-                client[node.command](args, function(err, res) {
-                    if (err) {
-                        node.error(err, msg);
-                    }
-                    else {
-                        msg.payload = res;
-                        node.send(msg);
-                    }
-                });
             });
         });
 
@@ -294,10 +284,14 @@ module.exports = function(RED) {
             if (config.pass !== "") {
                 options['auth_pass'] = config.pass;
             }
+            if (config.dbase !== "") {
+                options['db'] = config.dbase;
+            }
+
             var conn = redis.createClient(config.port, config.host, options);
             conn.on('error', function(err) {
                 console.log('[redis]', err);
-            })
+            });
             if (force !== undefined && force === true) {
                 return conn;
             }
