@@ -3,6 +3,7 @@ module.exports = function(RED) {
     var redis = require("redis");
     var connection = {};
     var usingConn = {};
+    var mustache = require("mustache");
 
     function RedisConfig(n) {
         RED.nodes.createNode(this, n);
@@ -242,7 +243,6 @@ module.exports = function(RED) {
                         shape: "dot",
                         text: "script loaded"
                     });
-                    console.log(res);
                     node.sha1 = res;
                 }
             });
@@ -275,22 +275,34 @@ module.exports = function(RED) {
     }
     RED.nodes.registerType("redis-lua-script", RedisLua);
 
+    function _setEnv(config) {
+        var result = [];
+        for (var key in config) {
+            if (/{{/.test(config[key])){
+                result[key] = mustache.render(config[key], process.env);
+            } else {
+                result[key] = config[key];
+            }
+        }
+        return result;
+    }
+
     function connect(config, force) {
         var options = {};
-
-        var idx = config.pass + '@' + config.host + ':' + config.port + '/' + config.dbase;
+        var idx = config.id;
+        var config_env = _setEnv(config);
 
         if (force !== undefined || usingConn[idx] === undefined || usingConn[idx] === 0) {
-            if (config.pass !== "") {
-                options['auth_pass'] = config.pass;
+            if (config_env.pass !== "") {
+                options['auth_pass'] = config_env.pass;
             }
-            if (config.dbase !== "") {
-                options['db'] = config.dbase;
+            if (config_env.dbase !== "") {
+                options['db'] = config_env.dbase;
             }
 
-            var conn = redis.createClient(config.port, config.host, options);
+            var conn = redis.createClient(config_env.port, config_env.host, options);
             conn.on('error', function(err) {
-                console.log('[redis]', err);
+                console.error('[redis]', err);
             });
             if (force !== undefined && force === true) {
                 return conn;
@@ -312,13 +324,13 @@ module.exports = function(RED) {
     }
 
     function disconnect(config) {
-        var idx = config.pass + '@' + config.host + ':' + config.port + '/' + config.dbase;
+        var idx = config.id;
         if (usingConn[idx] !== undefined) {
             usingConn[idx]--;
 
         }
         if (usingConn[idx] <= 0) {
-            connection[idx].end();
+            connection[idx].end(true);
         }
     }
 };

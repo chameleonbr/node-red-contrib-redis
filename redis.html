@@ -5,21 +5,19 @@
         category: 'config',
         defaults: {
             host: {
-                value: "localhost",
+                value: "{{REDIS_SERVER}}",
                 required: true
             },
             port: {
-                value: "6379",
-                required: true,
-                validate: RED.validators.number()
+                value: "{{REDIS_PORT}}",
+                required: true
             },
             dbase: {
-                value: "0",
-                required: true,
-                validate: RED.validators.number()
+                value: "{{REDIS_DB}}",
+                required: true
             },
             pass: {
-                value: "",
+                value: "{{REDIS_PASSWORD}}",
                 required: false
             }
         },
