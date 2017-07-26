@@ -1,6 +1,6 @@
 module.exports = function(RED) {
     "use strict";
-    var redis = require("redis");
+    var redis = require("ioredis");
     var connection = {};
     var usingConn = {};
     var mustache = require("mustache");
@@ -45,7 +45,7 @@ module.exports = function(RED) {
                 node.sto = null;
             }
             node.status({});
-            node.client.end();
+            disconnect(node.server);
             node.topics = [];
             done();
         });
@@ -330,7 +330,7 @@ module.exports = function(RED) {
 
         }
         if (usingConn[idx] <= 0) {
-            connection[idx].end(true);
+            connection[idx].disconnect();
         }
     }
 };
