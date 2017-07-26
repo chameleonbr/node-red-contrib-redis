@@ -28,14 +28,15 @@
     "url": "https://github.com/chameleonbr/node-red-contrib-redis/issues"
   },
   "homepage": "https://github.com/chameleonbr/node-red-contrib-redis#readme",
-  "dependencies": {
-    "bluebird": "^3.3.3",
-    "redis": "^2.4.2"
-  },
   "maintainers": [
     {
       "name": "chameleonbr",
       "email": "chameleonbr@gmail.com"
     }
-  ]
+  ],
+  "dependencies": {
+    "bluebird": "^3.5.0",
+    "mustache": "^2.3.0",
+    "redis": "^2.7.1"
+  }
 }
