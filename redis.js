@@ -294,7 +294,7 @@ module.exports = function(RED) {
 
         if (force !== undefined || usingConn[idx] === undefined || usingConn[idx] === 0) {
             if (config_env.pass !== "") {
-                options['auth_pass'] = config_env.pass;
+                options['password'] = config_env.pass;
             }
             if (config_env.dbase !== "") {
                 options['db'] = config_env.dbase;
