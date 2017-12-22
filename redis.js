@@ -292,7 +292,9 @@ module.exports = function(RED) {
         var idx = config.id;
         var config_env = _setEnv(config);
 
-        if (force !== undefined || usingConn[idx] === undefined || usingConn[idx] === 0) {
+        if (force !== undefined || usingConn[idx] === undefined ||
+            usingConn[idx] === 0 || usingConn[idx].connector === undefined) {
+
             if (config_env.pass !== "") {
                 options['password'] = config_env.pass;
             }
