@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-redis",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Node Red client for Redis with pub/sub, list, lua scripting  and other commands support.",
   "main": "index.js",
   "scripts": {
