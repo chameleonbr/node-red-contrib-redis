@@ -8,14 +8,14 @@
                 value: "{{REDIS_SERVER}}",
                 required: false,
                 validate: function(v) {
-                  return (v.length > 0 && $("#node-config-input-port").val().length > 0) || $("#node-config-input-sentinel").val().length > 0;
+                  return (v.length > 0 && $("#node-config-input-port").val().length > 0) || ($("#node-config-input-use-sentinel:checked").val() && $("#node-config-input-sentinel").val().length > 0);
                 }
             },
             port: {
                 value: "{{REDIS_PORT}}",
                 required: false,
               validate: function(v) {
-                return (v.length > 0 && $("#node-config-input-host").val().length > 0) || $("#node-config-input-sentinel").val().length > 0;
+                return (v.length > 0 && $("#node-config-input-host").val().length > 0) || ($("#node-config-input-use-sentinel:checked").val() && $("#node-config-input-sentinel").val().length > 0);
               }
             },
             "use-sentinel": {
@@ -39,7 +39,11 @@
             }
         },
         label: function() {
-            return this.host + ":" + this.port + "/" + this.dbase;
+            var _label = this.host + ":" + this.port + "/" + this.dbase;
+            if ($("#node-config-input-use-sentinel:checked").val()) {
+              _label = "[" + this.sentinel + "] " + _label;
+            }
+            return _label;
         }
     });
 </script>
@@ -54,7 +58,7 @@
         <input type="text" id="node-config-input-port">
     </div>
     <div class="form-row">
-        <label for="node-config-input-sentinel"><i class="fa fa-globe"></i> Use Sentinel</label>
+        <label for="node-config-input-use-sentinel"><i class="fa fa-globe"></i> Use Sentinel</label>
         <input type="checkbox" id="node-config-input-use-sentinel">
     </div>
     <div class="form-row">
