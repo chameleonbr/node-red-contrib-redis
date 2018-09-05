@@ -6,11 +6,28 @@
         defaults: {
             host: {
                 value: "{{REDIS_SERVER}}",
-                required: true
+                required: false,
+                validate: function(v) {
+                  return (v.length > 0 && $("#node-config-input-port").val().length > 0) || $("#node-config-input-sentinel").val().length > 0;
+                }
             },
             port: {
                 value: "{{REDIS_PORT}}",
-                required: true
+                required: false,
+              validate: function(v) {
+                return (v.length > 0 && $("#node-config-input-host").val().length > 0) || $("#node-config-input-sentinel").val().length > 0;
+              }
+            },
+            "use-sentinel": {
+              value: false,
+              required: false
+            },
+            sentinel: {
+                value: "{{REDIS_SENTINEL}}",
+                required: false,
+              validate: function(v) {
+                return ($("#node-config-input-host").val().length > 0 && $("#node-config-input-host").val().length > 0) || v.length > 0;
+              }
             },
             dbase: {
                 value: "{{REDIS_DB}}",
@@ -37,6 +54,14 @@
         <input type="text" id="node-config-input-port">
     </div>
     <div class="form-row">
+        <label for="node-config-input-sentinel"><i class="fa fa-globe"></i> Use Sentinel</label>
+        <input type="checkbox" id="node-config-input-use-sentinel">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-sentinel"><i class="fa fa-globe"></i> Sentinel</label>
+        <input type="text" id="node-config-input-sentinel">
+    </div>
+    <div class="form-row">
         <label for="node-config-input-dbase"><i class="fa fa-random"></i> DB</label>
         <input type="text" id="node-config-input-dbase">
     </div>
@@ -44,6 +69,14 @@
         <label for="node-config-input-pass"><i class="fa fa-lock"></i> Password</label>
         <input type="password" id="node-config-input-pass">
     </div>
+</script>
+
+<script type="text/x-red" data-help-name="redis-config">
+    <p>Redis Config</p>
+    <p>Either Host + Port or Sentinel Connection String is required.</p>
+    <p>For Sentinel, input all sentinel connections in the following format:<br>
+    &lt;sentinel host 1&gt;:&lt;sentinel port 1&gt;,&lt;sentinel host 2&gt;:&lt;sentinel port 2&gt;, .....
+    </p>
 </script>
 
 <script type="text/javascript">
