@@ -310,7 +310,7 @@ module.exports = function (RED) {
         options['db'] = config_env.dbase;
       }
 
-      if (config_env.sentinel) {
+      if (config_env["use-sentinel"] && config_env.sentinel && config_env.sentinel.length > 0) {
         var sentinels = [];
         config_env.sentinel.split(',').forEach(function (_config) {
           var host = _config.split(':')[0].trim();
