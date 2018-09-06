@@ -12,6 +12,8 @@ module.exports = function (RED) {
     this.port = n.port;
     this.dbase = n.dbase;
     this.pass = n.pass;
+    this.usesentinel = n['use-sentinel'];
+    this.sentinelname = n['sentinel-name'];
     this.sentinel = n.sentinel;
   }
 
@@ -310,7 +312,7 @@ module.exports = function (RED) {
         options['db'] = config_env.dbase;
       }
 
-      if (config_env["use-sentinel"] && config_env.sentinel && config_env.sentinel.length > 0) {
+      if (config_env.usesentinel && config_env.sentinel && config_env.sentinel.length > 0) {
         var sentinels = [];
         config_env.sentinel.split(',').forEach(function (_config) {
           var host = _config.split(':')[0].trim();
@@ -335,6 +337,12 @@ module.exports = function (RED) {
           });
         });
         options.sentinels = sentinels;
+        if (config_env.sentinelname && config_env.sentinelname.length > 0) {
+          options.name = config_env.sentinelname || 'mymaster';
+        } else {
+          console.warn('[redis] sentinel name is missing, use default "mymaster"');
+          options.name = 'mymaster';
+        }
       } else {
         options.host = config_env.host;
         options.port = config_env.port;

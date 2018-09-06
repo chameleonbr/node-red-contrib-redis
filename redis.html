@@ -8,25 +8,32 @@
                 value: "{{REDIS_SERVER}}",
                 required: false,
                 validate: function(v) {
-                  return (v.length > 0 && $("#node-config-input-port").val().length > 0) || ($("#node-config-input-use-sentinel:checked").val() && $("#node-config-input-sentinel").val().length > 0);
+                  return (v.length > 0 && $("#node-config-input-port").val().length > 0) || ($("#node-config-input-use-sentinel:checked").val() && $("#node-config-input-sentinel-name").val().length > 0 && $("#node-config-input-sentinel").val().length > 0);
                 }
             },
             port: {
                 value: "{{REDIS_PORT}}",
                 required: false,
               validate: function(v) {
-                return (v.length > 0 && $("#node-config-input-host").val().length > 0) || ($("#node-config-input-use-sentinel:checked").val() && $("#node-config-input-sentinel").val().length > 0);
+                return (v.length > 0 && $("#node-config-input-host").val().length > 0) || ($("#node-config-input-use-sentinel:checked").val() && $("#node-config-input-sentinel-name").val().length > 0 && $("#node-config-input-sentinel").val().length > 0);
               }
             },
             "use-sentinel": {
               value: false,
               required: false
             },
+            "sentinel-name": {
+                value: "{{REDIS_SENTINEL_NAME}}",
+                required: false,
+                validate: function(v) {
+                  return ($("#node-config-input-port").val().length > 0 && $("#node-config-input-host").val().length > 0) || ($("#node-config-input-use-sentinel:checked").val() && v.length > 0 && $("#node-config-input-sentinel").val().length > 0);
+                }
+            },
             sentinel: {
                 value: "{{REDIS_SENTINEL}}",
                 required: false,
               validate: function(v) {
-                return ($("#node-config-input-host").val().length > 0 && $("#node-config-input-host").val().length > 0) || v.length > 0;
+                return ($("#node-config-input-port").val().length > 0 && $("#node-config-input-host").val().length > 0) || ($("#node-config-input-use-sentinel:checked").val() && $("#node-config-input-sentinel-name").val().length > 0 && v.length > 0)
               }
             },
             dbase: {
@@ -62,7 +69,11 @@
         <input type="checkbox" id="node-config-input-use-sentinel">
     </div>
     <div class="form-row">
-        <label for="node-config-input-sentinel"><i class="fa fa-globe"></i> Sentinel</label>
+        <label for="node-config-input-sentinel-name"><i class="fa fa-globe"></i> Sentinel Name</label>
+        <input type="text" id="node-config-input-sentinel-name">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-sentinel"><i class="fa fa-globe"></i> Sentinel Hosts</label>
         <input type="text" id="node-config-input-sentinel">
     </div>
     <div class="form-row">
@@ -77,7 +88,7 @@
 
 <script type="text/x-red" data-help-name="redis-config">
     <p>Redis Config</p>
-    <p>Either Host + Port or Sentinel Connection String is required.</p>
+    <p>Either Host + Port or Sentinel Name + Host is required.</p>
     <p>For Sentinel, input all sentinel connections in the following format:<br>
     &lt;sentinel host 1&gt;:&lt;sentinel port 1&gt;,&lt;sentinel host 2&gt;:&lt;sentinel port 2&gt;, .....
     </p>
