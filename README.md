@@ -1,14 +1,17 @@
 # node-red-contrib-redis
 Node Red client for Redis with pub/sub, list, lua scripting and other commands support.
 
-Lua scripts first version, examples soon.
-Known issues:
-- Not open or save to the library
-- Syntax highlight not working
- 
+Now uses one connection per node to try bypass "Redis IN" issues.
 
+Roadmap:
+- Stream Support
+- Flow or msg redis instance injection to use on function Node.
+- Better Validations
+- Custom Commands support(Modules)
 
 Please test and make feedback.
+
+I need contributors...
 
 Redis Commands:
 
