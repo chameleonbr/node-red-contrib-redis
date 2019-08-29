@@ -1,16 +1,18 @@
-module.exports = function(RED) {
+module.exports = function (RED) {
     "use strict";
-    var redis = require("ioredis");
-    var connection = {};
-    var usingConn = {};
-    var mustache = require("mustache");
+    const Redis = require('ioredis');
+    const async = require('async');
+    let connections = {};
 
     function RedisConfig(n) {
         RED.nodes.createNode(this, n);
-        this.host = n.host;
-        this.port = n.port;
-        this.dbase = n.dbase;
-        this.pass = n.pass;
+        this.name = n.name;
+        this.cluster = n.cluster;
+        if (this.optionsType === "") {
+            this.options = n.options;
+        } else {
+            this.options = RED.util.evaluateNodeProperty(n.options, n.optionsType, this)
+        }
     }
     RED.nodes.registerType("redis-config", RedisConfig);
 
@@ -21,52 +23,24 @@ module.exports = function(RED) {
         this.name = n.name;
         this.topic = n.topic;
         this.timeout = n.timeout;
-        this.sto = null;
         this.topics = [];
-        this.client = connect(this.server, true);
-        var node = this;
+        let node = this;
+        console.log(n,this)
+        let client = getConn(this.server, n.id);
+        let running = true;
 
-        node.client.on('error', function(err) {
-            if (err) {
-                clearInterval(node.sto);
-                node.error(err);
-            }
-        });
-
-        node.on('close', function(done) {
-            if (node.command === "psubscribe") {
-                node.client.punsubscribe();
-            }
-            else if (node.command === "subscribe") {
-                node.client.unsubscribe();
-            }
-            if (node.sto !== null) {
-                clearInterval(node.sto);
-                node.sto = null;
-            }
+        node.on('close', async (undeploy, done) => {
             node.status({});
-            disconnect(node.server);
+            disconnect(node.id);
+            client = null;
             node.topics = [];
+            running = false;
             done();
         });
 
         node.topics = node.topic.split(' ');
-        if (node.command === "psubscribe" || node.command === "subscribe") {
-            node.client.on('subscribe', function(channel, count) {
-                node.status({
-                    fill: "green",
-                    shape: "dot",
-                    text: "connected"
-                });
-            });
-            node.client.on('psubscribe', function(channel, count) {
-                node.status({
-                    fill: "green",
-                    shape: "dot",
-                    text: "connected"
-                });
-            });
-            node.client.on('pmessage', function(pattern, channel, message) {
+        if (node.command === "psubscribe") {
+            client.on('pmessage', function (pattern, channel, message) {
                 var payload = null;
                 try {
                     payload = JSON.parse(message);
@@ -82,7 +56,16 @@ module.exports = function(RED) {
                     });
                 }
             });
-            node.client.on('message', function(channel, message) {
+            client[node.command](node.topics, (err, count) => {
+                console.log('e', err)
+                node.status({
+                    fill: "green",
+                    shape: "dot",
+                    text: "connected"
+                });
+            });
+        } else if (node.command === "subscribe") {
+            client.on('message', function (channel, message) {
                 var payload = null;
                 try {
                     payload = JSON.parse(message);
@@ -97,45 +80,49 @@ module.exports = function(RED) {
                     });
                 }
             });
-            node.client[node.command](node.topics);
+            client[node.command](node.topics, (err, count) => {
+                console.log('e', err)
+                node.status({
+                    fill: "green",
+                    shape: "dot",
+                    text: "connected"
+                });
+            });
         }
         else {
-            node.topics.push(node.timeout);
-            node.sto = setInterval(function() {
-                node.client[node.command](node.topics, function(err, data) {
-                    if (err) {
-                        node.error(err);
-                    }
-                    else {
-                        if (data !== null && data.length == 2) {
-                            var payload = null;
-                            try {
-                                payload = JSON.parse(data[1]);
-                            }
-                            catch (err) {
-                                payload = data[1];
-                            }
-                            finally {
-                                node.send({
-                                    payload: payload
-                                });
-                            }
+            async.whilst((cb) => {
+                cb(null, running);
+            }, (cb) => {
+                client[node.command](node.topics, Number(node.timeout)).then((data) => {
+                    console.log('data', data);
+                    if (data !== null && data.length == 2) {
+                        var payload = null;
+                        try {
+                            payload = JSON.parse(data[1]);
                         }
-                        else {
+                        catch (err) {
+                            payload = data[1];
+                        }
+                        finally {
                             node.send({
-                                payload: null
+                                payload: payload
                             });
                         }
                     }
-                });
-            }, 100);
-            node.status({
-                fill: "green",
-                shape: "dot",
-                text: "connected"
-            });
+                    cb(null);
+                }).catch((e) => {
+                    RED.log.info(e.message);
+                    running = false;
+                })
+            }, () => { })
         }
+        node.status({
+            fill: "green",
+            shape: "dot",
+            text: "connected"
+        });
     }
+
     RED.nodes.registerType("redis-in", RedisIn);
 
     function RedisOut(n) {
@@ -146,15 +133,16 @@ module.exports = function(RED) {
         this.topic = n.topic;
         var node = this;
 
-        var client = connect(node.server);
+        let client = getConn(this.server, n.id);
 
-        node.on('close', function(done) {
+        node.on('close', function (done) {
             node.status({});
-            disconnect(node.server);
+            disconnect(node.id);
+            client = null;
             done();
         });
 
-        node.on('input', function(msg) {
+        node.on('input', function (msg) {
             var topic;
             if (msg.topic !== undefined && msg.topic !== "") {
                 topic = msg.topic;
@@ -182,20 +170,21 @@ module.exports = function(RED) {
         this.topic = n.topic;
         var node = this;
 
-        var client = connect(node.server);
+        let client = getConn(this.server, n.id);
 
-        node.on('close', function(done) {
+        node.on('close', function (done) {
             node.status({});
-            disconnect(node.server);
+            disconnect(node.id);
+            client = null;
             done();
         });
 
-        node.on('input', function(msg) {
+        node.on('input', function (msg) {
             if (!Array.isArray(msg.payload)) {
                 throw Error('Payload is not Array');
             }
 
-            client[node.command](msg.payload, function(err, res) {
+            client[node.command](msg.payload, function (err, res) {
                 if (err) {
                     node.error(err, msg);
                 }
@@ -221,15 +210,16 @@ module.exports = function(RED) {
         this.command = 'eval';
         var node = this;
 
-        var client = connect(node.server);
+        let client = getConn(this.server, n.id);
 
-        node.on('close', function(done) {
+        node.on('close', function (done) {
             node.status({});
-            disconnect(node.server);
+            disconnect(n.id);
+            client = null;
             done();
         });
         if (node.stored) {
-            client.script('load', node.func, function(err, res) {
+            client.script('load', node.func, function (err, res) {
                 if (err) {
                     node.status({
                         fill: "red",
@@ -248,7 +238,7 @@ module.exports = function(RED) {
             });
         }
 
-        node.on('input', function(msg) {
+        node.on('input', function (msg) {
             if (node.keyval > 0 && !Array.isArray(msg.payload)) {
                 throw Error('Payload is not Array');
             }
@@ -261,7 +251,7 @@ module.exports = function(RED) {
             else {
                 args = [node.func, node.keyval].concat(msg.payload);
             }
-            client[node.command](args, function(err, res) {
+            client[node.command](args, function (err, res) {
                 if (err) {
                     node.error(err, msg);
                 }
@@ -275,64 +265,25 @@ module.exports = function(RED) {
     }
     RED.nodes.registerType("redis-lua-script", RedisLua);
 
-    function _setEnv(config) {
-        var result = [];
-        for (var key in config) {
-            if (/{{/.test(config[key])){
-                result[key] = mustache.render(config[key], process.env);
-            } else {
-                result[key] = config[key];
-            }
+    function getConn(config, id) {
+        console.log("Conn", id)
+        let options = config.options;
+        if (connections[id]) {
+            return connections[id]
         }
-        return result;
+        if (config.cluster) {
+            connections[id] = new Redis.Cluster(options);
+        } else {
+            connections[id] = new Redis(options);
+        }
+        return connections[id];
     }
 
-    function connect(config, force) {
-        var options = {};
-        var idx = config.id;
-        var config_env = _setEnv(config);
-
-        if (force !== undefined || usingConn[idx] === undefined ||
-            usingConn[idx] === 0 || usingConn[idx].connector === undefined) {
-
-            if (config_env.pass !== "") {
-                options['password'] = config_env.pass;
-            }
-            if (config_env.dbase !== "") {
-                options['db'] = config_env.dbase;
-            }
-
-            var conn = redis.createClient(config_env.port, config_env.host, options);
-            conn.on('error', function(err) {
-                console.error('[redis]', err);
-            });
-            if (force !== undefined && force === true) {
-                return conn;
-            }
-            else {
-                connection[idx] = conn;
-                if (usingConn[idx] === undefined) {
-                    usingConn[idx] = 1;
-                }
-                else {
-                    usingConn[idx]++;
-                }
-            }
-        }
-        else {
-            usingConn[idx]++;
-        }
-        return connection[idx];
-    }
-
-    function disconnect(config) {
-        var idx = config.id;
-        if (usingConn[idx] !== undefined) {
-            usingConn[idx]--;
-
-        }
-        if (usingConn[idx] <= 0) {
-            connection[idx].disconnect();
+    function disconnect(id) {
+        console.log("Disconnn", id)
+        if (connections[id]) {
+            connections[id].disconnect();
+            delete connections[id];
         }
     }
 };

@@ -4,54 +4,57 @@
     RED.nodes.registerType('redis-config', {
         category: 'config',
         defaults: {
-            host: {
-                value: "{{REDIS_SERVER}}",
+            name: {
+                value: "",
                 required: true
             },
-            port: {
-                value: "{{REDIS_PORT}}",
-                required: true
+            options: {
+                value: "localhost",
+                required: true,
+                validate: RED.validators.typedInput("optionsType"),
+
             },
-            dbase: {
-                value: "{{REDIS_DB}}",
-                required: true
+            cluster: {
+                value: false
             },
-            pass: {
-                value: "{{REDIS_PASSWORD}}",
-                required: false
-            }
+            optionsType: { value: "str" }
         },
-        label: function() {
-            return this.host + ":" + this.port + "/" + this.dbase;
+        label: function () {
+            return this.name || "Host";
+        },
+        oneditprepare: function () {
+            $("#node-config-input-options").typedInput({
+                default: 'str',
+                typeField: $("#node-config-input-optionsType"),
+                types: ['str', 'env', 'json']
+            });
+
         }
     });
 </script>
 
 <script type="text/x-red" data-template-name="redis-config">
     <div class="form-row">
-        <label for="node-config-input-host"><i class="fa fa-globe"></i> Host</label>
-        <input type="text" id="node-config-input-host">
+        <label for="node-config-input-name"><i class="fa fa-server"></i> Name</label>
+        <input type="text" id="node-config-input-name">
     </div>
     <div class="form-row">
-        <label for="node-config-input-port"><i class="fa fa-server"></i> Port</label>
-        <input type="text" id="node-config-input-port">
+        <label for="node-config-input-options"><i class="fa fa-random"></i> Options</label>
+        <input type="text" id="node-config-input-options">
+        <input type="hidden" id="node-config-input-optionsType">
     </div>
     <div class="form-row">
-        <label for="node-config-input-dbase"><i class="fa fa-random"></i> DB</label>
-        <input type="text" id="node-config-input-dbase">
-    </div>
-    <div class="form-row">
-        <label for="node-config-input-pass"><i class="fa fa-lock"></i> Password</label>
-        <input type="password" id="node-config-input-pass">
+        <label for="node-config-input-cluster">&nbsp;</label>
+        <input type="checkbox" id="node-config-input-cluster" style="display:inline-block; width:15px; vertical-align:baseline;"> Cluster
     </div>
 </script>
 
 <script type="text/javascript">
     /*global RED*/
     RED.nodes.registerType('redis-in', {
-        category: 'input',
+        category: 'Redis',
         outputs: 1,
-        color: "#ffaaaa",
+        color: "#ffffff",
         icon: "redis.png",
         paletteLabel: "redis in",
         defaults: {
@@ -73,7 +76,7 @@
                 validate: RED.validators.number()
             }
         },
-        label: function() {
+        label: function () {
             return this.name || "Redis IN";
         }
     });
@@ -118,10 +121,10 @@
 <script type="text/javascript">
     /*global RED*/
     RED.nodes.registerType('redis-out', {
-        category: 'output',
+        category: 'Redis',
         inputs: 1,
         outputs: 0,
-        color: "#ffaaaa",
+        color: "#ffffff",
         icon: "redis.png",
         align: "right",
         paletteLabel: "redis out",
@@ -140,7 +143,7 @@
                 value: ""
             }
         },
-        label: function() {
+        label: function () {
             return this.name || "Redis OUT";
         }
     });
@@ -181,10 +184,10 @@
 <script type="text/javascript">
     /*global RED*/
     RED.nodes.registerType('redis-command', {
-        category: 'function',
+        category: 'Redis',
         inputs: 1,
         outputs: 1,
-        color: "#ffaaaa",
+        color: "#ffffff",
         icon: "redis.png",
         paletteLabel: "redis cmd",
         defaults: {
@@ -202,7 +205,7 @@
                 value: ""
             }
         },
-        label: function() {
+        label: function () {
             return this.name || "Redis " + this.command;
         }
     });
@@ -407,10 +410,10 @@
 <script type="text/javascript">
     /*global RED*/
     RED.nodes.registerType('redis-lua-script', {
-        category: 'function',
+        category: 'Redis',
         inputs: 1,
         outputs: 1,
-        color: "#ffaaaa",
+        color: "#ffffff",
         icon: "redis.png",
         paletteLabel: "redis lua",
         defaults: {
@@ -432,10 +435,10 @@
                 value: false
             }
         },
-        label: function() {
+        label: function () {
             return this.name || "Redis Lua";
         },
-        oneditprepare: function() {
+        oneditprepare: function () {
             var that = this;
             $("#node-input-keyval").spinner({
                 min: 0
@@ -454,7 +457,7 @@
             });
             this.editor.focus();
         },
-        oneditsave: function() {
+        oneditsave: function () {
             var annot = this.editor.getSession().getAnnotations();
             this.noerr = 0;
             $("#node-input-noerr").val(0);
@@ -468,7 +471,7 @@
             $("#node-input-func").val(this.editor.getValue());
             delete this.editor;
         },
-        oneditresize: function(size) {
+        oneditresize: function (size) {
             var rows = $("#dialog-form>div:not(.node-text-editor-row)");
             var height = $("#dialog-form").height();
             for (var i = 0; i < rows.size(); i++) {
