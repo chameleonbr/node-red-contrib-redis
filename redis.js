@@ -147,11 +147,15 @@ module.exports = function (RED) {
             else {
                 topic = node.topic;
             }
-            try {
-                client[node.command](topic, JSON.stringify(msg.payload));
-            }
-            catch (err) {
-                node.error(err);
+            if (topic === "") {
+                node.error('Missing topic, please send topic on msg or set Topic on node.', msg)
+            } else {
+                try {
+                    client[node.command](topic, JSON.stringify(msg.payload));
+                }
+                catch (err) {
+                    node.error(err, msg);
+                }
             }
         });
 
@@ -165,9 +169,10 @@ module.exports = function (RED) {
         this.command = n.command;
         this.name = n.name;
         this.topic = n.topic;
+        this.params = n.params;
         var node = this;
         this.block = n.block || false;
-        let id = (this.block)?(n.id):(n.z); 
+        let id = (this.block) ? (n.id) : (n.z);
 
         let client = getConn(this.server, id);
 
@@ -179,11 +184,31 @@ module.exports = function (RED) {
         });
 
         node.on('input', function (msg) {
-            if (!Array.isArray(msg.payload)) {
-                throw Error('Payload is not Array');
+
+            let topic = undefined;
+
+            if (msg.topic) {
+                topic = msg.topic
+            } else if (node.topic && node.topic !== "") {
+                try {
+                    topic = node.topic
+                } catch (e) {
+                    topic = undefined
+                }
+            }
+            let payload = undefined;
+
+            if (msg.payload) {
+                payload = msg.payload
+            } else if (node.params && node.params !== "" && node.params !== "[]" && node.params !== "{}") {
+                try {
+                    payload = JSON.parse(node.params)
+                } catch (e) {
+                    payload = undefined
+                }
             }
 
-            client[node.command](msg.payload, function (err, res) {
+            let response = function (err, res) {
                 if (err) {
                     node.error(err, msg);
                 }
@@ -191,7 +216,18 @@ module.exports = function (RED) {
                     msg.payload = res;
                     node.send(msg);
                 }
-            });
+            };
+
+            if (!payload) {
+                payload = topic
+                topic = undefined
+            }
+
+            if (topic) {
+                client[node.command](topic, payload, response);
+            } else {
+                client[node.command](payload, response);
+            }
         });
 
     }
@@ -209,7 +245,7 @@ module.exports = function (RED) {
         this.command = 'eval';
         var node = this;
         this.block = n.block || false;
-        let id = (this.block)?(n.id):(n.z); 
+        let id = (this.block) ? (n.id) : (n.z);
 
         let client = getConn(this.server, id);
 

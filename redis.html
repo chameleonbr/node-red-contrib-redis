@@ -5,11 +5,11 @@
         category: 'config',
         defaults: {
             name: {
-                value: "",
+                value: "Local",
                 required: true
             },
             options: {
-                value: "localhost",
+                value: "{}",
                 required: true,
                 validate: RED.validators.typedInput("optionsType"),
 
@@ -17,10 +17,10 @@
             cluster: {
                 value: false
             },
-            optionsType: { value: "str" }
+            optionsType: { value: "json" }
         },
         label: function () {
-            return this.name || "Host";
+            return this.name || "Redis host";
         },
         oneditprepare: function () {
             $("#node-config-input-options").typedInput({
@@ -53,6 +53,7 @@
     /*global RED*/
     RED.nodes.registerType('redis-in', {
         category: 'Redis',
+        inputs: 0,
         outputs: 1,
         color: "#ffffff",
         icon: "redis.png",
@@ -69,7 +70,8 @@
                 value: ""
             },
             topic: {
-                value: ""
+                value: "",
+                required: true
             },
             timeout: {
                 value: 0,
@@ -77,7 +79,7 @@
             }
         },
         label: function () {
-            return this.name || "Redis IN";
+            return this.name || this.topic || "redis in";
         }
     });
 </script>
@@ -144,7 +146,7 @@
             }
         },
         label: function () {
-            return this.name || "Redis OUT";
+            return this.name || this.topic || "redis out";
         }
     });
 </script>
@@ -204,12 +206,28 @@
             topic: {
                 value: ""
             },
+            params: {
+                value: "{}",
+                validate: RED.validators.typedInput("paramsType"),
+                required: false
+            },
+            paramsType: { value: "json" },
+            payloadType: {
+                value: "json"
+            },
             block: {
                 value: false
             }
         },
         label: function () {
-            return this.name || "Redis " + this.command;
+            return this.name || "redis " + this.command + " " + (this.topic || "");
+        },
+        oneditprepare: function () {
+            $("#node-input-params").typedInput({
+                default: 'json',
+                typeField: $("#node-input-paramsType"),
+                types: ['json']
+            });
         }
     });
 </script>
@@ -224,7 +242,7 @@
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
     <div class="form-row">
-        <label for="node-input-topic"><i class="icon-tasks"></i> Topic</label>
+        <label for="node-input-topic"><i class="icon-tasks"></i> Topic/Key</label>
         <input type="text" id="node-input-topic" placeholder="Topic">
     </div>
     <div class="form-row">
@@ -401,6 +419,11 @@
             <option value="zscore">ZSCORE</option>
             <option value="zunionstore">ZUNIONSTORE</option>
         </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-params"><i class="fa fa-server"></i> Params</label>
+        <input type="text" id="node-input-params">
+        <input type="hidden" id="node-input-paramsType">
     </div>
     <div class="form-row">
         <label for="node-config-input-block">&nbsp;</label>
