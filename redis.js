@@ -3,6 +3,7 @@ module.exports = function (RED) {
     const Redis = require('ioredis');
     const async = require('async');
     let connections = {};
+    let usedConn = {}
 
     function RedisConfig(n) {
         RED.nodes.createNode(this, n);
@@ -25,7 +26,6 @@ module.exports = function (RED) {
         this.timeout = n.timeout;
         this.topics = [];
         let node = this;
-        console.log(n,this)
         let client = getConn(this.server, n.id);
         let running = true;
 
@@ -57,7 +57,6 @@ module.exports = function (RED) {
                 }
             });
             client[node.command](node.topics, (err, count) => {
-                console.log('e', err)
                 node.status({
                     fill: "green",
                     shape: "dot",
@@ -81,7 +80,6 @@ module.exports = function (RED) {
                 }
             });
             client[node.command](node.topics, (err, count) => {
-                console.log('e', err)
                 node.status({
                     fill: "green",
                     shape: "dot",
@@ -94,7 +92,6 @@ module.exports = function (RED) {
                 cb(null, running);
             }, (cb) => {
                 client[node.command](node.topics, Number(node.timeout)).then((data) => {
-                    console.log('data', data);
                     if (data !== null && data.length == 2) {
                         var payload = null;
                         try {
@@ -133,11 +130,11 @@ module.exports = function (RED) {
         this.topic = n.topic;
         var node = this;
 
-        let client = getConn(this.server, n.id);
+        let client = getConn(this.server, node.z);
 
         node.on('close', function (done) {
             node.status({});
-            disconnect(node.id);
+            disconnect(node.z);
             client = null;
             done();
         });
@@ -169,12 +166,14 @@ module.exports = function (RED) {
         this.name = n.name;
         this.topic = n.topic;
         var node = this;
+        this.block = n.block || false;
+        let id = (this.block)?(n.id):(n.z); 
 
-        let client = getConn(this.server, n.id);
+        let client = getConn(this.server, id);
 
         node.on('close', function (done) {
             node.status({});
-            disconnect(node.id);
+            disconnect(id);
             client = null;
             done();
         });
@@ -209,12 +208,14 @@ module.exports = function (RED) {
         this.sha1 = "";
         this.command = 'eval';
         var node = this;
+        this.block = n.block || false;
+        let id = (this.block)?(n.id):(n.z); 
 
-        let client = getConn(this.server, n.id);
+        let client = getConn(this.server, id);
 
         node.on('close', function (done) {
             node.status({});
-            disconnect(n.id);
+            disconnect(id);
             client = null;
             done();
         });
@@ -266,9 +267,9 @@ module.exports = function (RED) {
     RED.nodes.registerType("redis-lua-script", RedisLua);
 
     function getConn(config, id) {
-        console.log("Conn", id)
         let options = config.options;
         if (connections[id]) {
+            usedConn[id]++
             return connections[id]
         }
         if (config.cluster) {
@@ -276,12 +277,17 @@ module.exports = function (RED) {
         } else {
             connections[id] = new Redis(options);
         }
+        if (usedConn[id] === undefined) {
+            usedConn[id] = 1
+        }
         return connections[id];
     }
 
     function disconnect(id) {
-        console.log("Disconnn", id)
-        if (connections[id]) {
+        if (usedConn[id] !== undefined) {
+            usedConn[id]--
+        }
+        if (connections[id] && usedConn[id] <= 0) {
             connections[id].disconnect();
             delete connections[id];
         }

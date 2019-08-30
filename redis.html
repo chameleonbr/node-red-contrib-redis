@@ -203,6 +203,9 @@
             },
             topic: {
                 value: ""
+            },
+            block: {
+                value: false
             }
         },
         label: function () {
@@ -399,6 +402,10 @@
             <option value="zunionstore">ZUNIONSTORE</option>
         </select>
     </div>
+    <div class="form-row">
+        <label for="node-config-input-block">&nbsp;</label>
+        <input type="checkbox" id="node-config-input-block" style="display:inline-block; width:15px; vertical-align:baseline;"> Block Commands(Force use new connection)
+    </div>
 </script>
 
 <script type="text/x-red" data-help-name="redis-command">
@@ -432,6 +439,9 @@
                 value: "\nreturn nil"
             },
             stored: {
+                value: false
+            },
+            block: {
                 value: false
             }
         },
@@ -511,6 +521,10 @@
     </div>
     <div class="form-row node-text-editor-row">
         <div style="height: 250px;" class="node-text-editor" id="node-input-func-editor"></div>
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-block">&nbsp;</label>
+        <input type="checkbox" id="node-config-input-block" style="display:inline-block; width:15px; vertical-align:baseline;"> Block Commands(Force use new connection)
     </div>
 </script>
 
