@@ -560,3 +560,73 @@
     <p>Script: Lua script</p>
     <p>Payload: you need send all keys before, after send all values.</p>
 </script>
+
+
+
+<script type="text/javascript">
+    /*global RED*/
+    RED.nodes.registerType('redis-instance', {
+        category: 'Redis',
+        inputs: 0,
+        outputs: 0,
+        color: "#ffffff",
+        icon: "redis.png",
+        paletteLabel: "instance",
+        defaults: {
+            server: {
+                value: "",
+                type: "redis-config"
+            },
+            name: {
+                value: ""
+            },
+            topic: {
+                value: "redis",
+                required: true
+            },
+            location: {
+                value: "flow",
+                required: true
+            },
+            block: {
+                value: false
+            }
+        },
+        label: function () {
+            return this.name || this.topic || "instance";
+        }
+    });
+</script>
+
+<script type="text/x-red" data-template-name="redis-instance">
+    <div class="form-row">
+        <label for="node-input-server"><i class="fa fa-globe"></i> Server</label>
+        <input type="text" id="node-input-server" placeholder="Server">
+    </div>
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-topic"><i class="icon-tasks"></i> Topic</label>
+        <input type="text" id="node-input-topic" placeholder="Topic">
+    </div>
+    <div class="form-row">
+        <label for="node-input-location"><i class="fa fa-unlock"></i> Location</label>
+        <select id="node-input-location">
+            <option value="flow" selected>Flow</option>
+            <option value="global">Global</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-block">&nbsp;</label>
+        <input type="checkbox" id="node-config-input-block" style="display:inline-block; width:15px; vertical-align:baseline;"> Block Commands(Force use new connection)
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="redis-instance">
+    <p>Redis Instance</p>
+    <p>Injects a Redis connection on flow or global context.</p> 
+    <p>The Topic is the var name of redis.</p>
+    <p></p>
+</script>

@@ -302,6 +302,31 @@ module.exports = function (RED) {
     }
     RED.nodes.registerType("redis-lua-script", RedisLua);
 
+    function RedisInstance(n) {
+        RED.nodes.createNode(this, n);
+        this.server = RED.nodes.getNode(n.server);
+        this.location = n.location;
+        this.name = n.name;
+        this.topic = n.topic;
+        this.block = n.block;
+        let id = (this.block) ? (n.id) : (n.z);
+        var node = this;
+        let client = getConn(this.server, id);
+
+        this.context()[node.location].set(node.topic, client);
+
+        node.on('close', function (done) {
+            node.status({});
+            this.context()[node.location].set(node.topic, null);
+            disconnect(id);
+            client = null;
+            done();
+        });
+    }
+    RED.nodes.registerType("redis-instance", RedisInstance);
+
+
+
     function getConn(config, id) {
         let options = config.options;
         if (connections[id]) {
