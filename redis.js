@@ -199,7 +199,24 @@ module.exports = function (RED) {
             let payload = undefined;
 
             if (msg.payload) {
-                payload = msg.payload
+                let type = typeof msg.payload
+                switch (type) {
+                    case "string":
+                        if (msg.payload.length > 0) {
+                            payload = msg.payload
+                        }
+                        break;
+                    case "object":
+                        if (Object.keys(msg.payload).length > 0) {
+                            payload = msg.payload
+                        }
+                        break;
+                    case "array":
+                        if (msg.payload.length > 0) {
+                            payload = msg.payload
+                        }
+                        break;
+                }
             } else if (node.params && node.params !== "" && node.params !== "[]" && node.params !== "{}") {
                 try {
                     payload = JSON.parse(node.params)
