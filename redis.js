@@ -24,7 +24,6 @@ module.exports = function (RED) {
         this.name = n.name;
         this.topic = n.topic;
         this.timeout = n.timeout;
-        this.topics = [];
         let node = this;
         let client = getConn(this.server, n.id);
         let running = true;
@@ -33,12 +32,10 @@ module.exports = function (RED) {
             node.status({});
             disconnect(node.id);
             client = null;
-            node.topics = [];
             running = false;
             done();
         });
 
-        node.topics = node.topic.split(' ');
         if (node.command === "psubscribe") {
             client.on('pmessage', function (pattern, channel, message) {
                 var payload = null;
@@ -56,7 +53,7 @@ module.exports = function (RED) {
                     });
                 }
             });
-            client[node.command](node.topics, (err, count) => {
+            client[node.command](node.topic, (err, count) => {
                 node.status({
                     fill: "green",
                     shape: "dot",
@@ -79,7 +76,7 @@ module.exports = function (RED) {
                     });
                 }
             });
-            client[node.command](node.topics, (err, count) => {
+            client[node.command](node.topic, (err, count) => {
                 node.status({
                     fill: "green",
                     shape: "dot",
@@ -91,7 +88,7 @@ module.exports = function (RED) {
             async.whilst((cb) => {
                 cb(null, running);
             }, (cb) => {
-                client[node.command](node.topics, Number(node.timeout)).then((data) => {
+                client[node.command](node.topic, Number(node.timeout)).then((data) => {
                     if (data !== null && data.length == 2) {
                         var payload = null;
                         try {
