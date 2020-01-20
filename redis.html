@@ -208,7 +208,7 @@
             },
             params: {
                 value: "{}",
-                validate: RED.validators.typedInput("paramsType"),
+                validate: function(v) { if (!this.required && !v) return true; return RED.validators.typedInput("paramsType")(v);},
                 required: false
             },
             paramsType: { value: "json" },
