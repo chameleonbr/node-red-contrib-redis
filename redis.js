@@ -3,7 +3,7 @@ module.exports = function (RED) {
     const Redis = require('ioredis');
     const async = require('async');
     let connections = {};
-    let usedConn = {}
+    let usedConn = {};
 
     function RedisConfig(n) {
         RED.nodes.createNode(this, n);
@@ -199,7 +199,7 @@ module.exports = function (RED) {
             let payload = undefined;
 
             if (msg.payload) {
-                let type = typeof msg.payload
+                let type = typeof msg.payload;
                 switch (type) {
                     case "string":
                         if (msg.payload.length > 0) {
@@ -347,8 +347,8 @@ module.exports = function (RED) {
     function getConn(config, id) {
         let options = config.options;
         if (connections[id]) {
-            usedConn[id]++
-            return connections[id]
+            usedConn[id]++;
+            return connections[id];
         }
         if (config.cluster) {
             connections[id] = new Redis.Cluster(options);
