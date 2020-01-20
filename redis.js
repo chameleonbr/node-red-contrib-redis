@@ -207,12 +207,13 @@ module.exports = function (RED) {
                         }
                         break;
                     case "object":
-                        if (Object.keys(msg.payload).length > 0) {
-                            payload = msg.payload
+                        if (Array.isArray(msg.payload)) {
+                            if (msg.payload.length > 0) {
+                                payload = msg.payload
+                            }
+                            break;
                         }
-                        break;
-                    case "array":
-                        if (msg.payload.length > 0) {
+                        if (Object.keys(msg.payload).length > 0) {
                             payload = msg.payload
                         }
                         break;
