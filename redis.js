@@ -5,6 +5,39 @@ module.exports = function (RED) {
     let connections = {};
     let usedConn = {}
 
+    function iterate(opts, cb) {
+        if (Array.isArray(opts)) {
+            opts.forEach(cb);
+        } else if (typeof opts === 'object') {
+            Object.keys(opts).forEach(function (k) {
+                cb(opts[k], k, opts);
+            });
+        }
+    }
+
+    function tryToBindEnvVar(value) {
+        if (typeof value !== 'string') {
+            return value;
+        }
+
+        if (value.indexOf('${') === -1) {
+            return value;
+        }
+
+        const name = value.replace(/[${}]/g, '');
+        return process.env[name];
+    }
+
+    function bindEnvVar(opts) {
+        iterate(opts, function (value, key, src) {
+            if (typeof value === 'string') {
+                src[key] = tryToBindEnvVar(value);
+            } else if (Array.isArray(value) || typeof value === 'object') {
+                bindEnvVar(value);
+            }
+        });
+    }
+
     function RedisConfig(n) {
         RED.nodes.createNode(this, n);
         this.name = n.name;
@@ -14,6 +47,8 @@ module.exports = function (RED) {
         } else {
             this.options = RED.util.evaluateNodeProperty(n.options, n.optionsType, this)
         }
+
+        bindEnvVar(this.options);
     }
     RED.nodes.registerType("redis-config", RedisConfig);
 
