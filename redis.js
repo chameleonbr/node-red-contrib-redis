@@ -3,7 +3,7 @@ module.exports = function (RED) {
     const Redis = require('ioredis');
     const async = require('async');
     let connections = {};
-    let usedConn = {}
+    let usedConn = {};
 
     function RedisConfig(n) {
         RED.nodes.createNode(this, n);
@@ -199,7 +199,7 @@ module.exports = function (RED) {
             let payload = undefined;
 
             if (msg.payload) {
-                let type = typeof msg.payload
+                let type = typeof msg.payload;
                 switch (type) {
                     case "string":
                         if (msg.payload.length > 0) {
@@ -207,12 +207,13 @@ module.exports = function (RED) {
                         }
                         break;
                     case "object":
-                        if (Object.keys(msg.payload).length > 0) {
-                            payload = msg.payload
+                        if (Array.isArray(msg.payload)) {
+                            if (msg.payload.length > 0) {
+                                payload = msg.payload
+                            }
+                            break;
                         }
-                        break;
-                    case "array":
-                        if (msg.payload.length > 0) {
+                        if (Object.keys(msg.payload).length > 0) {
                             payload = msg.payload
                         }
                         break;
@@ -345,10 +346,44 @@ module.exports = function (RED) {
 
 
     function getConn(config, id) {
-        let options = config.options;
         if (connections[id]) {
-            usedConn[id]++
-            return connections[id]
+            usedConn[id]++;
+            return connections[id];
+        }
+
+        let options = config.options;
+
+        if (!options) {
+            return config.error('Missing options in the redis config - Are you upgrading from old version?', null);
+        }
+
+        const urllib = require('url');
+        let url = options.host;
+        let parsed = urllib.parse(url, true, true);
+
+        if (!parsed.slashes && url[0] !== '/') {
+            url = `//${url}`;
+            parsed = urllib.parse(url, true, true);
+        }
+
+        if (parsed.auth) {
+            options.password = parsed.auth.split(':')[1];
+        }
+        if (parsed.pathname) {
+            if (parsed.protocol === 'redis:') {
+                if (parsed.pathname.length > 1) {
+                    options.db = parsed.pathname.slice(1);
+                }
+            }
+            else {
+                options.path = parsed.pathname;
+            }
+        }
+        if (parsed.host) {
+            options.host = parsed.hostname;
+        }
+        if (parsed.port) {
+            options.port = parsed.port;
         }
         if (config.cluster) {
             connections[id] = new Redis.Cluster(options);
