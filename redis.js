@@ -323,8 +323,7 @@ module.exports = function (RED) {
     this.location = n.location;
     this.name = n.name;
     this.topic = n.topic;
-    this.block = n.block;
-    let id = this.block ? n.id : n.z;
+    let id = n.id;
     var node = this;
     let client = getConn(this.server, id);
 
@@ -354,15 +353,24 @@ module.exports = function (RED) {
         null
       );
     }
-    if (config.cluster) {
-      connections[id] = new Redis.Cluster(options);
-    } else {
-      connections[id] = new Redis(options);
+    try {
+      if (config.cluster) {
+        connections[id] = new Redis.Cluster(options);
+      } else {
+        connections[id] = new Redis(options);
+      }
+
+      connections[id].on("error", (e) => {
+        config.error(e, null);
+      });
+
+      if (usedConn[id] === undefined) {
+        usedConn[id] = 1;
+      }
+      return connections[id];
+    } catch (e) {
+      config.error(e.message, null);
     }
-    if (usedConn[id] === undefined) {
-      usedConn[id] = 1;
-    }
-    return connections[id];
   }
 
   function disconnect(id) {
