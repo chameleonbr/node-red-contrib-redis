@@ -1,19 +1,23 @@
 # node-red-contrib-redis
 Node Red client for Redis with pub/sub, list, lua scripting, ssl, cluster, custom commands, instance injection and other commands support.
 
+Connection Options parameter receives IORedis object or string (https://github.com/luin/ioredis#connect-to-redis).
+
 Now uses same connection per flow and open new if you set block connection option.
 
 Roadmap:
-- (partial via instance injection)Stream Support
+- (ok)Stream Support
 - (ok)Flow or Global redis instance injection to use on function Node.
 - (wip)Better Validations
-- (instance injection)Custom Commands support(Modules)
+- (ok)Custom Commands support(Modules), with instance or Cmd.
 
 See the Sample flow before ask how this module works.
 
 Please test and make feedback.
 
 I need contributors...
+
+
 
 Redis Commands:
 
