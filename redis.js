@@ -129,8 +129,8 @@ module.exports = function (RED) {
     this.name = n.name;
     this.topic = n.topic;
     var node = this;
-
-    let client = getConn(this.server, node.z);
+ 
+    let client = getConn(this.server, node.server.name);
 
     node.on("close", function (done) {
       node.status({});
@@ -171,7 +171,7 @@ module.exports = function (RED) {
     this.params = n.params;
     var node = this;
     this.block = n.block || false;
-    let id = this.block ? n.id : n.z;
+    let id = this.block ? n.id : n.server.name;
 
     let client = getConn(this.server, id);
 
@@ -264,7 +264,7 @@ module.exports = function (RED) {
     this.command = "eval";
     var node = this;
     this.block = n.block || false;
-    let id = this.block ? n.id : n.z;
+    let id = this.block ? n.id : n.server.name;
 
     let client = getConn(this.server, id);
 

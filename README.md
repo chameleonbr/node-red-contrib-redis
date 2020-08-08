@@ -3,7 +3,7 @@ Node Red client for Redis with pub/sub, list, lua scripting, ssl, cluster, custo
 
 Connection Options parameter receives IORedis object or string (https://github.com/luin/ioredis#connect-to-redis).
 
-Now uses same connection per flow and open new if you set block connection option.
+Now uses same connection per config name and open new if you set block connection option.
 
 Roadmap:
 - (ok)Stream Support
