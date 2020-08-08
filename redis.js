@@ -134,7 +134,7 @@ module.exports = function (RED) {
 
     node.on("close", function (done) {
       node.status({});
-      disconnect(node.z);
+      disconnect( node.server.name);
       client = null;
       done();
     });
