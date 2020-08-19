@@ -139,23 +139,23 @@ module.exports = function (RED) {
       done();
     });
 
-    node.on("input", function (msg) {
+    node.on("input", function (msg, send, done) {
       var topic;
+      send = send || function() { node.send.apply(node,arguments) }
+      done = done || function(err) { if(err)node.error(err, msg); }
       if (msg.topic !== undefined && msg.topic !== "") {
         topic = msg.topic;
       } else {
         topic = node.topic;
       }
       if (topic === "") {
-        node.error(
-          "Missing topic, please send topic on msg or set Topic on node.",
-          msg
-        );
+        done(new Error("Missing topic, please send topic on msg or set Topic on node."));
       } else {
         try {
           client[node.command](topic, JSON.stringify(msg.payload));
+          done();
         } catch (err) {
-          node.error(err, msg);
+          done(err);
         }
       }
     });
@@ -182,8 +182,10 @@ module.exports = function (RED) {
       done();
     });
 
-    node.on("input", function (msg) {
+    node.on("input", function (msg, send, done) {
       let topic = undefined;
+      send = send || function() { node.send.apply(node,arguments) }
+      done = done || function(err) { if(err)node.error(err, msg); }
 
       if (msg.topic) {
         topic = msg.topic;
@@ -231,10 +233,11 @@ module.exports = function (RED) {
 
       let response = function (err, res) {
         if (err) {
-          node.error(err, msg);
+          done(err);
         } else {
           msg.payload = res;
-          node.send(msg);
+          send(msg);
+          done();
         }
       };
 
@@ -293,7 +296,9 @@ module.exports = function (RED) {
       });
     }
 
-    node.on("input", function (msg) {
+    node.on("input", function (msg, send, done) {
+      send = send || function() { node.send.apply(node,arguments) }
+      done = done || function(err) { if(err)node.error(err, msg); }
       if (node.keyval > 0 && !Array.isArray(msg.payload)) {
         throw Error("Payload is not Array");
       }
@@ -307,10 +312,11 @@ module.exports = function (RED) {
       }
       client[node.command](args, function (err, res) {
         if (err) {
-          node.error(err, msg);
+          done(err);
         } else {
           msg.payload = res;
-          node.send(msg);
+          send(msg);
+          done();
         }
       });
     });
@@ -328,6 +334,11 @@ module.exports = function (RED) {
     let client = getConn(this.server, id);
 
     this.context()[node.location].set(node.topic, client);
+    node.status({
+      fill: "green",
+      shape: "dot",
+      text: "ready",
+    });
 
     node.on("close", function (done) {
       node.status({});
