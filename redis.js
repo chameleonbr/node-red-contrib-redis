@@ -27,6 +27,7 @@ module.exports = function (RED) {
     this.command = n.command;
     this.name = n.name;
     this.topic = n.topic;
+    this.obj = n.obj;
     this.timeout = n.timeout;
     let node = this;
     let client = getConn(this.server, n.id);
@@ -44,7 +45,11 @@ module.exports = function (RED) {
       client.on("pmessage", function (pattern, channel, message) {
         var payload = null;
         try {
-          payload = JSON.parse(message);
+          if(node.obj){
+            payload = JSON.parse(message);
+          }else{
+            payload = message;
+          }
         } catch (err) {
           payload = message;
         } finally {
@@ -66,7 +71,11 @@ module.exports = function (RED) {
       client.on("message", function (channel, message) {
         var payload = null;
         try {
-          payload = JSON.parse(message);
+          if(node.obj){
+            payload = JSON.parse(message);
+          }else{
+            payload = message;
+          }
         } catch (err) {
           payload = message;
         } finally {
@@ -94,11 +103,16 @@ module.exports = function (RED) {
               if (data !== null && data.length == 2) {
                 var payload = null;
                 try {
-                  payload = JSON.parse(data[1]);
+                  if(node.obj){
+                    payload = JSON.parse(data[1]);
+                  }else{
+                    payload = data[1];
+                  }
                 } catch (err) {
                   payload = data[1];
                 } finally {
                   node.send({
+                    topic: node.topic,
                     payload: payload,
                   });
                 }
@@ -128,6 +142,7 @@ module.exports = function (RED) {
     this.command = n.command;
     this.name = n.name;
     this.topic = n.topic;
+    this.obj = n.obj;
     var node = this;
  
     let client = getConn(this.server, node.server.name);
@@ -152,7 +167,11 @@ module.exports = function (RED) {
         done(new Error("Missing topic, please send topic on msg or set Topic on node."));
       } else {
         try {
-          client[node.command](topic, JSON.stringify(msg.payload));
+          if(node.obj){
+            client[node.command](topic, JSON.stringify(msg.payload));
+          }else{
+            client[node.command](topic, msg.payload);
+          }
           done();
         } catch (err) {
           done(err);

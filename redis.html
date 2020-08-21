@@ -73,6 +73,9 @@
                 value: "",
                 required: true
             },
+            obj: {
+                value: true
+            },
             timeout: {
                 value: 0,
                 validate: RED.validators.number()
@@ -110,6 +113,10 @@
         <label for="node-input-timeout"><i class="fa fa-clock-o"></i> Timeout</label>
         <input type="text" id="node-input-timeout" placeholder="Timeout">
     </div>
+    <div class="form-row">
+        <label for="node-input-obj">&nbsp;</label>
+        <input type="checkbox" id="node-input-obj" style="display:inline-block; width:15px; vertical-align:baseline;"> Parse payload from JSON Object
+    </div>
 </script>
 
 <script type="text/x-red" data-help-name="redis-in">
@@ -143,6 +150,9 @@
             },
             topic: {
                 value: ""
+            },
+            obj: {
+                value: true
             }
         },
         label: function () {
@@ -173,6 +183,10 @@
             <option value="lpushx">LPUSHX</option>
             <option value="publish">PUBLISH</option>
         </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-obj">&nbsp;</label>
+        <input type="checkbox" id="node-input-obj" style="display:inline-block; width:15px; vertical-align:baseline;"> Serialize payload to JSON Object
     </div>
 </script>
 
