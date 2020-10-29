@@ -206,7 +206,7 @@ module.exports = function (RED) {
       send = send || function() { node.send.apply(node,arguments) }
       done = done || function(err) { if(err)node.error(err, msg); }
 
-      if (msg.topic) {
+      if (msg.topic !== undefined && msg.topic !== "") {
         topic = msg.topic;
       } else if (node.topic && node.topic !== "") {
         try {
