@@ -190,7 +190,7 @@ module.exports = function (RED) {
     this.params = n.params;
     var node = this;
     this.block = n.block || false;
-    let id = this.block ? n.id : n.server.name;
+    let id = this.block ? n.id : this.server.name;
 
     let client = getConn(this.server, id);
 
