@@ -23,7 +23,7 @@ module.exports = function (RED) {
 
   function RedisIn(n) {
     RED.nodes.createNode(this, n);
-    this.server = RED.nodes.getNode(n.server);
+    this.server = n.server; // Shoudln't this be the server and port? I'm not able to get this to connect to non-local redis. Was RED.nodes.getNode(n.server);
     this.command = n.command;
     this.name = n.name;
     this.topic = n.topic;
