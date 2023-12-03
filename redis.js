@@ -5,18 +5,18 @@ module.exports = function (RED) {
   let connections = {};
   let usedConn = {};
 
-  function RedisConfig(n) {
+function RedisConfig(n) {
     RED.nodes.createNode(this, n);
     this.name = n.name;
     this.cluster = n.cluster;
     if (this.optionsType === "") {
       this.options = n.options;
     } else {
-      this.options = RED.util.evaluateNodeProperty(
-        n.options,
-        n.optionsType,
-        this
-      );
+      RED.util.evaluateNodeProperty(n.options, n.optionsType,this,undefined,(err,value) => {
+           if(!err) {
+            this.options = value
+          }
+      });
     }
   }
   RED.nodes.registerType("redis-config", RedisConfig);
