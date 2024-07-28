@@ -1,8 +1,5 @@
-# node-red-v4-contrib-redis
+# node-red-contrib-redis
 Node Red client for Redis with pub/sub, list, lua scripting, ssl, cluster, custom commands, instance injection and other commands support.
-
-This is a fork from the excellent node-red-contrib-redis with a small patch to make it compliant with the upcoming (Feb.24) Node Red v4. 
-The proposed patch to the main branch was not considered. The repo seems abandoned.
 
 Connection Options parameter receives IORedis object or string (https://github.com/luin/ioredis#connect-to-redis).
 
