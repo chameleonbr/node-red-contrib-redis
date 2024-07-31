@@ -13,8 +13,18 @@ function RedisConfig(n) {
       this.options = n.options;
     } else {
       RED.util.evaluateNodeProperty(n.options, n.optionsType,this,undefined,(err,value) => {
-           if(!err) {
-            this.options = value
+          if(!err) {
+            // Check if value is a string and optionsType is "env"
+            if (typeof value === 'string' && n.optionsType === "env") {
+                try {
+                    this.options = JSON.parse(value); // Attempt to parse JSON
+                } catch (e) {
+                    console.warn("Failed to parse env as JSON string in redis-config node, use plain value:", e);
+                    this.options = value;  // Keep the value as is if it's not valid JSON
+                }
+            } else {
+                this.options = value;
+            }
           }
       });
     }
