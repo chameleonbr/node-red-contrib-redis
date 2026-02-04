@@ -37,6 +37,8 @@ function RedisConfig(n) {
     this.command = n.command;
     this.name = n.name;
     this.topic = n.topic;
+    this.groupname = n.groupname;
+    this.consumername = n.consumername;
     this.obj = n.obj;
     this.timeout = n.timeout;
     let node = this;
