@@ -1,0 +1,146 @@
+[
+    {
+        "id": "0b69b432fc4eb5e0",
+        "type": "redis-command",
+        "z": "6eb5c526e737cb21",
+        "server": "redis_local_config",
+        "command": "SET",
+        "name": "",
+        "topic": "",
+        "params": "[]",
+        "paramsType": "json",
+        "payloadType": "json",
+        "block": false,
+        "x": 480,
+        "y": 1080,
+        "wires": [
+            [
+                "89dcbf7b80b88e4c"
+            ]
+        ]
+    },
+    {
+        "id": "04bb0f32abdfc17f",
+        "type": "inject",
+        "z": "6eb5c526e737cb21",
+        "name": "Send key-value pair",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "[\"key\",\"value\"]",
+        "payloadType": "json",
+        "x": 250,
+        "y": 1080,
+        "wires": [
+            [
+                "0b69b432fc4eb5e0"
+            ]
+        ]
+    },
+    {
+        "id": "89dcbf7b80b88e4c",
+        "type": "debug",
+        "z": "6eb5c526e737cb21",
+        "name": "Redis response",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 700,
+        "y": 1080,
+        "wires": []
+    },
+    {
+        "id": "025b8214e5d52f95",
+        "type": "redis-command",
+        "z": "6eb5c526e737cb21",
+        "server": "redis_local_config",
+        "command": "GET",
+        "name": "",
+        "topic": "",
+        "params": "[]",
+        "paramsType": "json",
+        "payloadType": "json",
+        "block": false,
+        "x": 480,
+        "y": 1160,
+        "wires": [
+            [
+                "15d06bbd282a0c5e"
+            ]
+        ]
+    },
+    {
+        "id": "821a9e64117bfb8c",
+        "type": "inject",
+        "z": "6eb5c526e737cb21",
+        "name": "Get value of key",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "[\"key\"]",
+        "payloadType": "json",
+        "x": 240,
+        "y": 1160,
+        "wires": [
+            [
+                "025b8214e5d52f95"
+            ]
+        ]
+    },
+    {
+        "id": "15d06bbd282a0c5e",
+        "type": "debug",
+        "z": "6eb5c526e737cb21",
+        "name": "Display value from Redis",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 730,
+        "y": 1160,
+        "wires": []
+    },
+    {
+        "id": "redis_local_config",
+        "type": "redis-config",
+        "name": "Local Redis",
+        "options": "{}",
+        "cluster": false,
+        "optionsType": "json"
+    },
+    {
+        "id": "baeb1924fa6eec5c",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-redis": "2.0.0"
+        }
+    }
+]
