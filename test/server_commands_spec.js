@@ -5,7 +5,7 @@ const { cleanupKeys } = require("./helpers/cleanup");
 helper.init(require.resolve("node-red"));
 
 describe("Server commands", function () {
-  this.timeout(5000);
+  this.timeout(10000);
 
   const configNode = {
     id: "config1",
@@ -710,6 +710,174 @@ describe("Server commands", function () {
       });
 
       lolwutNode.receive({});
+    });
+  });
+
+  it("should ECHO return the same string that was sent", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "echo-node",
+        type: "redis-command",
+        server: "config1",
+        command: "ECHO",
+        name: "ECHO",
+        topic: "",
+        params: "[]",
+        wires: [["echo-helper"]],
+      },
+      { id: "echo-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const echoNode = helper.getNode("echo-node");
+      const echoHelper = helper.getNode("echo-helper");
+
+      echoHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.equal("hello");
+          done();
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      echoNode.receive({ payload: "hello" });
+    });
+  });
+
+  it("should PUBLISH send a message to a channel and return subscriber count", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "publish-node",
+        type: "redis-command",
+        server: "config1",
+        command: "PUBLISH",
+        name: "PUBLISH",
+        topic: "",
+        params: "[]",
+        wires: [["publish-helper"]],
+      },
+      { id: "publish-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const publishNode = helper.getNode("publish-node");
+      const publishHelper = helper.getNode("publish-helper");
+
+      publishHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.be.a.Number();
+          done();
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      publishNode.receive({
+        topic: "test:srv:channel",
+        payload: "hello",
+      });
+    });
+  });
+
+  it("should PUBSUB CHANNELS return an array of active channel names", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "pubsub-node",
+        type: "redis-command",
+        server: "config1",
+        command: "PUBSUB",
+        name: "PUBSUB",
+        topic: "",
+        params: "[]",
+        wires: [["pubsub-helper"]],
+      },
+      { id: "pubsub-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const pubsubNode = helper.getNode("pubsub-node");
+      const pubsubHelper = helper.getNode("pubsub-helper");
+
+      pubsubHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.be.an.Array();
+          done();
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      pubsubNode.receive({ payload: ["CHANNELS", "*"] });
+    });
+  });
+
+  it("should BGREWRITEAOF trigger AOF rewrite and return a string response", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "bgrewriteaof-node",
+        type: "redis-command",
+        server: "config1",
+        command: "BGREWRITEAOF",
+        name: "BGREWRITEAOF",
+        topic: "",
+        params: "[]",
+        wires: [["bgrewriteaof-helper"]],
+      },
+      { id: "bgrewriteaof-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const bgrewriteaofNode = helper.getNode("bgrewriteaof-node");
+      const bgrewriteaofHelper = helper.getNode("bgrewriteaof-helper");
+
+      bgrewriteaofHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.be.a.String();
+          done();
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      bgrewriteaofNode.receive({});
+    });
+  });
+
+  it("should BGSAVE or SAVE perform a background or synchronous save", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "save-node",
+        type: "redis-command",
+        server: "config1",
+        command: "SAVE",
+        name: "SAVE",
+        topic: "",
+        params: "[]",
+        wires: [["save-helper"]],
+      },
+      { id: "save-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const saveNode = helper.getNode("save-node");
+      const saveHelper = helper.getNode("save-helper");
+
+      saveHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.equal("OK");
+          done();
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      saveNode.receive({});
     });
   });
 

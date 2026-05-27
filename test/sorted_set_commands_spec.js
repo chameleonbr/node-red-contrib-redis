@@ -1769,6 +1769,232 @@ describe("Sorted Set commands", function () {
     });
   });
 
+  it("should ZINTERCARD return the count of intersection members", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "zadd1-node",
+        type: "redis-command",
+        server: "config1",
+        command: "ZADD",
+        name: "ZADD1",
+        topic: "",
+        params: "[]",
+        wires: [["zadd1-helper"]],
+      },
+      { id: "zadd1-helper", type: "helper" },
+      {
+        id: "zadd2-node",
+        type: "redis-command",
+        server: "config1",
+        command: "ZADD",
+        name: "ZADD2",
+        topic: "",
+        params: "[]",
+        wires: [["zadd2-helper"]],
+      },
+      { id: "zadd2-helper", type: "helper" },
+      {
+        id: "zintercard-node",
+        type: "redis-command",
+        server: "config1",
+        command: "ZINTERCARD",
+        name: "ZINTERCARD",
+        topic: "",
+        params: "[]",
+        wires: [["zintercard-helper"]],
+      },
+      { id: "zintercard-helper", type: "helper" },
+      {
+        id: "del-node",
+        type: "redis-command",
+        server: "config1",
+        command: "DEL",
+        name: "DEL",
+        topic: "",
+        params: "[]",
+        wires: [["del-helper"]],
+      },
+      { id: "del-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const zadd1Node = helper.getNode("zadd1-node");
+      const zadd1Helper = helper.getNode("zadd1-helper");
+      const zadd2Node = helper.getNode("zadd2-node");
+      const zadd2Helper = helper.getNode("zadd2-helper");
+      const zintercardNode = helper.getNode("zintercard-node");
+      const zintercardHelper = helper.getNode("zintercard-helper");
+      const delNode = helper.getNode("del-node");
+      const delHelper = helper.getNode("del-helper");
+
+      delHelper.on("input", () => {
+        done();
+      });
+
+      zintercardHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.equal(1);
+          delNode.receive({
+            payload: ["test:zset:zic1", "test:zset:zic2"],
+          });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      zadd2Helper.on("input", () => {
+        zintercardNode.receive({
+          payload: ["2", "test:zset:zic1", "test:zset:zic2"],
+        });
+      });
+
+      zadd1Helper.on("input", () => {
+        zadd2Node.receive({
+          topic: "test:zset:zic2",
+          payload: ["1", "b", "2", "c"],
+        });
+      });
+
+      zadd1Node.receive({
+        topic: "test:zset:zic1",
+        payload: ["1", "a", "2", "b"],
+      });
+    });
+  });
+
+  it("should ZMPOP pop the minimum element from a sorted set", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "zadd-node",
+        type: "redis-command",
+        server: "config1",
+        command: "ZADD",
+        name: "ZADD",
+        topic: "",
+        params: "[]",
+        wires: [["zadd-helper"]],
+      },
+      { id: "zadd-helper", type: "helper" },
+      {
+        id: "zmpop-node",
+        type: "redis-command",
+        server: "config1",
+        command: "ZMPOP",
+        name: "ZMPOP",
+        topic: "",
+        params: "[]",
+        wires: [["zmpop-helper"]],
+      },
+      { id: "zmpop-helper", type: "helper" },
+      {
+        id: "del-node",
+        type: "redis-command",
+        server: "config1",
+        command: "DEL",
+        name: "DEL",
+        topic: "",
+        params: "[]",
+        wires: [["del-helper"]],
+      },
+      { id: "del-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const zaddNode = helper.getNode("zadd-node");
+      const zaddHelper = helper.getNode("zadd-helper");
+      const zmpopNode = helper.getNode("zmpop-node");
+      const zmpopHelper = helper.getNode("zmpop-helper");
+      const delNode = helper.getNode("del-node");
+      const delHelper = helper.getNode("del-helper");
+
+      delHelper.on("input", () => {
+        done();
+      });
+
+      zmpopHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.be.an.Array();
+          msg.payload[0].should.equal("test:zset:zmpop");
+          msg.payload[1].should.be.an.Array();
+          msg.payload[1][0][0].should.equal("a");
+          delNode.receive({ topic: "test:zset:zmpop" });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      zaddHelper.on("input", () => {
+        zmpopNode.receive({
+          payload: ["1", "test:zset:zmpop", "MIN"],
+        });
+      });
+
+      zaddNode.receive({
+        topic: "test:zset:zmpop",
+        payload: ["1", "a", "2", "b"],
+      });
+    });
+  });
+
+  it("should BZMPOP return immediately when sorted set has data", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "zadd-node",
+        type: "redis-command",
+        server: "config1",
+        command: "ZADD",
+        name: "ZADD",
+        topic: "",
+        params: "[]",
+        wires: [["zadd-helper"]],
+      },
+      { id: "zadd-helper", type: "helper" },
+      {
+        id: "bzmpop-node",
+        type: "redis-command",
+        server: "config1",
+        command: "BZMPOP",
+        name: "BZMPOP",
+        block: true,
+        topic: "",
+        params: "[]",
+        wires: [["bzmpop-helper"]],
+      },
+      { id: "bzmpop-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const zaddNode = helper.getNode("zadd-node");
+      const zaddHelper = helper.getNode("zadd-helper");
+      const bzmpopNode = helper.getNode("bzmpop-node");
+      const bzmpopHelper = helper.getNode("bzmpop-helper");
+
+      bzmpopHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.not.be.null();
+          msg.payload.should.be.an.Array();
+          done();
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      zaddHelper.on("input", () => {
+        bzmpopNode.receive({
+          payload: ["1", "1", "test:zset:bzmpop", "MIN"],
+        });
+      });
+
+      zaddNode.receive({
+        topic: "test:zset:bzmpop",
+        payload: ["1", "a"],
+      });
+    });
+  });
+
   it("should BZPOPMIN return immediately when sorted set has data", function (done) {
     const flow = [
       configNode,

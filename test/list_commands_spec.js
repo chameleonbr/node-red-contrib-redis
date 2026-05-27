@@ -1081,6 +1081,213 @@ describe("List commands", function () {
     });
   });
 
+  it("should BLMOVE atomically move element between lists when data is present", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "lpush-node",
+        type: "redis-command",
+        server: "config1",
+        command: "LPUSH",
+        name: "LPUSH",
+        topic: "",
+        params: "[]",
+        wires: [["lpush-helper"]],
+      },
+      { id: "lpush-helper", type: "helper" },
+      {
+        id: "blmove-node",
+        type: "redis-command",
+        server: "config1",
+        command: "BLMOVE",
+        name: "BLMOVE",
+        block: true,
+        topic: "",
+        params: "[]",
+        wires: [["blmove-helper"]],
+      },
+      { id: "blmove-helper", type: "helper" },
+      {
+        id: "del-node",
+        type: "redis-command",
+        server: "config1",
+        command: "DEL",
+        name: "DEL",
+        topic: "",
+        params: "[]",
+        wires: [["del-helper"]],
+      },
+      { id: "del-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const lpushNode = helper.getNode("lpush-node");
+      const lpushHelper = helper.getNode("lpush-helper");
+      const blmoveNode = helper.getNode("blmove-node");
+      const blmoveHelper = helper.getNode("blmove-helper");
+      const delNode = helper.getNode("del-node");
+      const delHelper = helper.getNode("del-helper");
+
+      delHelper.on("input", () => {
+        done();
+      });
+
+      blmoveHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.equal("val");
+          delNode.receive({
+            payload: ["test:list:blmovesrc", "test:list:blmovedst"],
+          });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      lpushHelper.on("input", () => {
+        blmoveNode.receive({
+          payload: [
+            "test:list:blmovesrc",
+            "test:list:blmovedst",
+            "LEFT",
+            "RIGHT",
+            "1",
+          ],
+        });
+      });
+
+      lpushNode.receive({ topic: "test:list:blmovesrc", payload: "val" });
+    });
+  });
+
+  it("should LMPOP pop the first element from a list", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "rpush-node",
+        type: "redis-command",
+        server: "config1",
+        command: "RPUSH",
+        name: "RPUSH",
+        topic: "",
+        params: "[]",
+        wires: [["rpush-helper"]],
+      },
+      { id: "rpush-helper", type: "helper" },
+      {
+        id: "lmpop-node",
+        type: "redis-command",
+        server: "config1",
+        command: "LMPOP",
+        name: "LMPOP",
+        topic: "",
+        params: "[]",
+        wires: [["lmpop-helper"]],
+      },
+      { id: "lmpop-helper", type: "helper" },
+      {
+        id: "del-node",
+        type: "redis-command",
+        server: "config1",
+        command: "DEL",
+        name: "DEL",
+        topic: "",
+        params: "[]",
+        wires: [["del-helper"]],
+      },
+      { id: "del-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const rpushNode = helper.getNode("rpush-node");
+      const rpushHelper = helper.getNode("rpush-helper");
+      const lmpopNode = helper.getNode("lmpop-node");
+      const lmpopHelper = helper.getNode("lmpop-helper");
+      const delNode = helper.getNode("del-node");
+      const delHelper = helper.getNode("del-helper");
+
+      delHelper.on("input", () => {
+        done();
+      });
+
+      lmpopHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.be.an.Array();
+          msg.payload[0].should.equal("test:list:lmpop");
+          msg.payload[1].should.be.an.Array();
+          msg.payload[1][0].should.equal("a");
+          delNode.receive({ topic: "test:list:lmpop" });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      rpushHelper.on("input", () => {
+        lmpopNode.receive({
+          payload: ["1", "test:list:lmpop", "LEFT"],
+        });
+      });
+
+      rpushNode.receive({
+        topic: "test:list:lmpop",
+        payload: ["a", "b", "c"],
+      });
+    });
+  });
+
+  it("should BLMPOP return immediately when list has data", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "rpush-node",
+        type: "redis-command",
+        server: "config1",
+        command: "RPUSH",
+        name: "RPUSH",
+        topic: "",
+        params: "[]",
+        wires: [["rpush-helper"]],
+      },
+      { id: "rpush-helper", type: "helper" },
+      {
+        id: "blmpop-node",
+        type: "redis-command",
+        server: "config1",
+        command: "BLMPOP",
+        name: "BLMPOP",
+        block: true,
+        topic: "",
+        params: "[]",
+        wires: [["blmpop-helper"]],
+      },
+      { id: "blmpop-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const rpushNode = helper.getNode("rpush-node");
+      const rpushHelper = helper.getNode("rpush-helper");
+      const blmpopNode = helper.getNode("blmpop-node");
+      const blmpopHelper = helper.getNode("blmpop-helper");
+
+      blmpopHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.not.be.null();
+          msg.payload.should.be.an.Array();
+          done();
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      rpushHelper.on("input", () => {
+        blmpopNode.receive({
+          payload: ["1", "1", "test:list:blmpop", "LEFT"],
+        });
+      });
+
+      rpushNode.receive({ topic: "test:list:blmpop", payload: "x" });
+    });
+  });
+
   it("should BLPOP return immediately when list has data", function (done) {
     const flow = [
       configNode,

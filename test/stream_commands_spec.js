@@ -815,6 +815,359 @@ describe("Stream commands", function () {
     });
   });
 
+  it("should XSETID update the last ID of a stream", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "xadd-node",
+        type: "redis-command",
+        server: "config1",
+        command: "XADD",
+        name: "XADD",
+        topic: "",
+        params: "[]",
+        wires: [["xadd-helper"]],
+      },
+      { id: "xadd-helper", type: "helper" },
+      {
+        id: "xsetid-node",
+        type: "redis-command",
+        server: "config1",
+        command: "XSETID",
+        name: "XSETID",
+        topic: "",
+        params: "[]",
+        wires: [["xsetid-helper"]],
+      },
+      { id: "xsetid-helper", type: "helper" },
+      {
+        id: "xlen-node",
+        type: "redis-command",
+        server: "config1",
+        command: "XLEN",
+        name: "XLEN",
+        topic: "",
+        params: "[]",
+        wires: [["xlen-helper"]],
+      },
+      { id: "xlen-helper", type: "helper" },
+      {
+        id: "del-node",
+        type: "redis-command",
+        server: "config1",
+        command: "DEL",
+        name: "DEL",
+        topic: "",
+        params: "[]",
+        wires: [["del-helper"]],
+      },
+      { id: "del-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const xaddNode = helper.getNode("xadd-node");
+      const xaddHelper = helper.getNode("xadd-helper");
+      const xsetidNode = helper.getNode("xsetid-node");
+      const xsetidHelper = helper.getNode("xsetid-helper");
+      const xlenNode = helper.getNode("xlen-node");
+      const xlenHelper = helper.getNode("xlen-helper");
+      const delNode = helper.getNode("del-node");
+      const delHelper = helper.getNode("del-helper");
+
+      delHelper.on("input", () => {
+        done();
+      });
+
+      xlenHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.equal(1);
+          delNode.receive({ topic: "test:stream:xsetid" });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      xsetidHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.equal("OK");
+          xlenNode.receive({ payload: "test:stream:xsetid" });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      xaddHelper.on("input", () => {
+        xsetidNode.receive({
+          payload: ["test:stream:xsetid", "9999999999999-0"],
+        });
+      });
+
+      xaddNode.receive({
+        topic: "test:stream:xsetid",
+        payload: ["*", "f1", "v1"],
+      });
+    });
+  });
+
+  it("should XCLAIM reassign a pending message to another consumer", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "xadd-node",
+        type: "redis-command",
+        server: "config1",
+        command: "XADD",
+        name: "XADD",
+        topic: "",
+        params: "[]",
+        wires: [["xadd-helper"]],
+      },
+      { id: "xadd-helper", type: "helper" },
+      {
+        id: "xgroup-node",
+        type: "redis-command",
+        server: "config1",
+        command: "XGROUP",
+        name: "XGROUP",
+        topic: "",
+        params: "[]",
+        wires: [["xgroup-helper"]],
+      },
+      { id: "xgroup-helper", type: "helper" },
+      {
+        id: "xreadgroup-node",
+        type: "redis-command",
+        server: "config1",
+        command: "XREADGROUP",
+        name: "XREADGROUP",
+        topic: "",
+        params: "[]",
+        wires: [["xreadgroup-helper"]],
+      },
+      { id: "xreadgroup-helper", type: "helper" },
+      {
+        id: "xclaim-node",
+        type: "redis-command",
+        server: "config1",
+        command: "XCLAIM",
+        name: "XCLAIM",
+        topic: "",
+        params: "[]",
+        wires: [["xclaim-helper"]],
+      },
+      { id: "xclaim-helper", type: "helper" },
+      {
+        id: "del-node",
+        type: "redis-command",
+        server: "config1",
+        command: "DEL",
+        name: "DEL",
+        topic: "",
+        params: "[]",
+        wires: [["del-helper"]],
+      },
+      { id: "del-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const xaddNode = helper.getNode("xadd-node");
+      const xaddHelper = helper.getNode("xadd-helper");
+      const xgroupNode = helper.getNode("xgroup-node");
+      const xgroupHelper = helper.getNode("xgroup-helper");
+      const xreadgroupNode = helper.getNode("xreadgroup-node");
+      const xreadgroupHelper = helper.getNode("xreadgroup-helper");
+      const xclaimNode = helper.getNode("xclaim-node");
+      const xclaimHelper = helper.getNode("xclaim-helper");
+      const delNode = helper.getNode("del-node");
+      const delHelper = helper.getNode("del-helper");
+
+      delHelper.on("input", () => {
+        done();
+      });
+
+      xclaimHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.be.an.Array();
+          msg.payload.length.should.be.above(0);
+          delNode.receive({ topic: "test:stream:xclaim" });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      xreadgroupHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.be.an.Array();
+          const entryId = msg.payload[0][1][0][0];
+          xclaimNode.receive({
+            payload: [
+              "test:stream:xclaim",
+              "xclaimgroup",
+              "consumer2",
+              "0",
+              entryId,
+            ],
+          });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      xgroupHelper.on("input", () => {
+        xreadgroupNode.receive({
+          payload: [
+            "GROUP",
+            "xclaimgroup",
+            "consumer1",
+            "COUNT",
+            "10",
+            "STREAMS",
+            "test:stream:xclaim",
+            ">",
+          ],
+        });
+      });
+
+      xaddHelper.on("input", () => {
+        xgroupNode.receive({
+          payload: ["CREATE", "test:stream:xclaim", "xclaimgroup", "0"],
+        });
+      });
+
+      xaddNode.receive({
+        topic: "test:stream:xclaim",
+        payload: ["*", "f1", "v1"],
+      });
+    });
+  });
+
+  it("should XAUTOCLAIM reassign idle pending messages", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "xadd-node",
+        type: "redis-command",
+        server: "config1",
+        command: "XADD",
+        name: "XADD",
+        topic: "",
+        params: "[]",
+        wires: [["xadd-helper"]],
+      },
+      { id: "xadd-helper", type: "helper" },
+      {
+        id: "xgroup-node",
+        type: "redis-command",
+        server: "config1",
+        command: "XGROUP",
+        name: "XGROUP",
+        topic: "",
+        params: "[]",
+        wires: [["xgroup-helper"]],
+      },
+      { id: "xgroup-helper", type: "helper" },
+      {
+        id: "xreadgroup-node",
+        type: "redis-command",
+        server: "config1",
+        command: "XREADGROUP",
+        name: "XREADGROUP",
+        topic: "",
+        params: "[]",
+        wires: [["xreadgroup-helper"]],
+      },
+      { id: "xreadgroup-helper", type: "helper" },
+      {
+        id: "xautoclaim-node",
+        type: "redis-command",
+        server: "config1",
+        command: "XAUTOCLAIM",
+        name: "XAUTOCLAIM",
+        topic: "",
+        params: "[]",
+        wires: [["xautoclaim-helper"]],
+      },
+      { id: "xautoclaim-helper", type: "helper" },
+      {
+        id: "del-node",
+        type: "redis-command",
+        server: "config1",
+        command: "DEL",
+        name: "DEL",
+        topic: "",
+        params: "[]",
+        wires: [["del-helper"]],
+      },
+      { id: "del-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const xaddNode = helper.getNode("xadd-node");
+      const xaddHelper = helper.getNode("xadd-helper");
+      const xgroupNode = helper.getNode("xgroup-node");
+      const xgroupHelper = helper.getNode("xgroup-helper");
+      const xreadgroupNode = helper.getNode("xreadgroup-node");
+      const xreadgroupHelper = helper.getNode("xreadgroup-helper");
+      const xautoclaimNode = helper.getNode("xautoclaim-node");
+      const xautoclaimHelper = helper.getNode("xautoclaim-helper");
+      const delNode = helper.getNode("del-node");
+      const delHelper = helper.getNode("del-helper");
+
+      delHelper.on("input", () => {
+        done();
+      });
+
+      xautoclaimHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.be.an.Array();
+          // response is [next-id, entries, deleted-ids]
+          msg.payload.length.should.equal(3);
+          delNode.receive({ topic: "test:stream:xautoclaim" });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      xreadgroupHelper.on("input", () => {
+        xautoclaimNode.receive({
+          payload: [
+            "test:stream:xautoclaim",
+            "xacgroup",
+            "consumer2",
+            "0",
+            "0-0",
+          ],
+        });
+      });
+
+      xgroupHelper.on("input", () => {
+        xreadgroupNode.receive({
+          payload: [
+            "GROUP",
+            "xacgroup",
+            "consumer1",
+            "COUNT",
+            "10",
+            "STREAMS",
+            "test:stream:xautoclaim",
+            ">",
+          ],
+        });
+      });
+
+      xaddHelper.on("input", () => {
+        xgroupNode.receive({
+          payload: ["CREATE", "test:stream:xautoclaim", "xacgroup", "0"],
+        });
+      });
+
+      xaddNode.receive({
+        topic: "test:stream:xautoclaim",
+        payload: ["*", "f1", "v1"],
+      });
+    });
+  });
+
   it("should XINFO STREAM return stream metadata", function (done) {
     const flow = [
       configNode,

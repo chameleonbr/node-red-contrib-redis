@@ -1190,6 +1190,351 @@ describe("Key commands", function () {
     });
   });
 
+  it("should EXPIRETIME return the expiry as unix timestamp", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "set-node",
+        type: "redis-command",
+        server: "config1",
+        command: "SET",
+        name: "SET",
+        topic: "",
+        params: "[]",
+        wires: [["set-helper"]],
+      },
+      { id: "set-helper", type: "helper" },
+      {
+        id: "expireat-node",
+        type: "redis-command",
+        server: "config1",
+        command: "EXPIREAT",
+        name: "EXPIREAT",
+        topic: "",
+        params: "[]",
+        wires: [["expireat-helper"]],
+      },
+      { id: "expireat-helper", type: "helper" },
+      {
+        id: "expiretime-node",
+        type: "redis-command",
+        server: "config1",
+        command: "EXPIRETIME",
+        name: "EXPIRETIME",
+        topic: "",
+        params: "[]",
+        wires: [["expiretime-helper"]],
+      },
+      { id: "expiretime-helper", type: "helper" },
+      {
+        id: "del-node",
+        type: "redis-command",
+        server: "config1",
+        command: "DEL",
+        name: "DEL",
+        topic: "",
+        params: "[]",
+        wires: [["del-helper"]],
+      },
+      { id: "del-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const setNode = helper.getNode("set-node");
+      const setHelper = helper.getNode("set-helper");
+      const expireatNode = helper.getNode("expireat-node");
+      const expireatHelper = helper.getNode("expireat-helper");
+      const expiretimeNode = helper.getNode("expiretime-node");
+      const expiretimeHelper = helper.getNode("expiretime-helper");
+      const delNode = helper.getNode("del-node");
+      const delHelper = helper.getNode("del-helper");
+
+      const futureTs = Math.floor(Date.now() / 1000) + 315360000; // ~10 years
+
+      delHelper.on("input", () => {
+        done();
+      });
+
+      expiretimeHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.be.above(0);
+          delNode.receive({ topic: "test:key:expiretime" });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      expireatHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.equal(1);
+          expiretimeNode.receive({ topic: "test:key:expiretime" });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      setHelper.on("input", () => {
+        expireatNode.receive({
+          topic: "test:key:expiretime",
+          payload: String(futureTs),
+        });
+      });
+
+      setNode.receive({ topic: "test:key:expiretime", payload: "v" });
+    });
+  });
+
+  it("should PEXPIRETIME return the expiry as millisecond timestamp", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "set-node",
+        type: "redis-command",
+        server: "config1",
+        command: "SET",
+        name: "SET",
+        topic: "",
+        params: "[]",
+        wires: [["set-helper"]],
+      },
+      { id: "set-helper", type: "helper" },
+      {
+        id: "pexpire-node",
+        type: "redis-command",
+        server: "config1",
+        command: "PEXPIRE",
+        name: "PEXPIRE",
+        topic: "",
+        params: "[]",
+        wires: [["pexpire-helper"]],
+      },
+      { id: "pexpire-helper", type: "helper" },
+      {
+        id: "pexpiretime-node",
+        type: "redis-command",
+        server: "config1",
+        command: "PEXPIRETIME",
+        name: "PEXPIRETIME",
+        topic: "",
+        params: "[]",
+        wires: [["pexpiretime-helper"]],
+      },
+      { id: "pexpiretime-helper", type: "helper" },
+      {
+        id: "del-node",
+        type: "redis-command",
+        server: "config1",
+        command: "DEL",
+        name: "DEL",
+        topic: "",
+        params: "[]",
+        wires: [["del-helper"]],
+      },
+      { id: "del-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const setNode = helper.getNode("set-node");
+      const setHelper = helper.getNode("set-helper");
+      const pexpireNode = helper.getNode("pexpire-node");
+      const pexpireHelper = helper.getNode("pexpire-helper");
+      const pexpiretimeNode = helper.getNode("pexpiretime-node");
+      const pexpiretimeHelper = helper.getNode("pexpiretime-helper");
+      const delNode = helper.getNode("del-node");
+      const delHelper = helper.getNode("del-helper");
+
+      delHelper.on("input", () => {
+        done();
+      });
+
+      pexpiretimeHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.be.above(0);
+          delNode.receive({ topic: "test:key:pexpiretime" });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      pexpireHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.equal(1);
+          pexpiretimeNode.receive({ topic: "test:key:pexpiretime" });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      setHelper.on("input", () => {
+        pexpireNode.receive({
+          topic: "test:key:pexpiretime",
+          payload: "10000",
+        });
+      });
+
+      setNode.receive({ topic: "test:key:pexpiretime", payload: "v" });
+    });
+  });
+
+  it("should DUMP serialize a key and RESTORE deserialize it", function (done) {
+    const Redis = require("ioredis");
+    const flow = [
+      configNode,
+      {
+        id: "restore-node",
+        type: "redis-command",
+        server: "config1",
+        command: "RESTORE",
+        name: "RESTORE",
+        topic: "",
+        params: "[]",
+        wires: [["restore-helper"]],
+      },
+      { id: "restore-helper", type: "helper" },
+      {
+        id: "get-node",
+        type: "redis-command",
+        server: "config1",
+        command: "GET",
+        name: "GET",
+        topic: "",
+        params: "[]",
+        wires: [["get-helper"]],
+      },
+      { id: "get-helper", type: "helper" },
+      {
+        id: "del-node",
+        type: "redis-command",
+        server: "config1",
+        command: "DEL",
+        name: "DEL",
+        topic: "",
+        params: "[]",
+        wires: [["del-helper"]],
+      },
+      { id: "del-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const restoreNode = helper.getNode("restore-node");
+      const restoreHelper = helper.getNode("restore-helper");
+      const getNode = helper.getNode("get-node");
+      const getHelper = helper.getNode("get-helper");
+      const delNode = helper.getNode("del-node");
+      const delHelper = helper.getNode("del-helper");
+
+      delHelper.on("input", () => {
+        done();
+      });
+
+      getHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.equal("hello");
+          delNode.receive({
+            payload: ["test:key:dump", "test:key:restored"],
+          });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      restoreHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.equal("OK");
+          getNode.receive({ topic: "test:key:restored" });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      // Use a direct ioredis connection with buffer support to DUMP the key
+      const directClient = new Redis({ host: "127.0.0.1", port: 6379 });
+      directClient.set("test:key:dump", "hello").then(() => {
+        return directClient.callBuffer("DUMP", "test:key:dump");
+      }).then((dumpBuf) => {
+        directClient.disconnect();
+        restoreNode.receive({
+          topic: "test:key:restored",
+          payload: ["0", dumpBuf],
+        });
+      }).catch((err) => {
+        directClient.disconnect();
+        done(err);
+      });
+    });
+  });
+
+  it("should SORT_RO return sorted elements without modifying the list", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "rpush-node",
+        type: "redis-command",
+        server: "config1",
+        command: "RPUSH",
+        name: "RPUSH",
+        topic: "",
+        params: "[]",
+        wires: [["rpush-helper"]],
+      },
+      { id: "rpush-helper", type: "helper" },
+      {
+        id: "sortro-node",
+        type: "redis-command",
+        server: "config1",
+        command: "SORT_RO",
+        name: "SORT_RO",
+        topic: "",
+        params: "[]",
+        wires: [["sortro-helper"]],
+      },
+      { id: "sortro-helper", type: "helper" },
+      {
+        id: "del-node",
+        type: "redis-command",
+        server: "config1",
+        command: "DEL",
+        name: "DEL",
+        topic: "",
+        params: "[]",
+        wires: [["del-helper"]],
+      },
+      { id: "del-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const rpushNode = helper.getNode("rpush-node");
+      const rpushHelper = helper.getNode("rpush-helper");
+      const sortroNode = helper.getNode("sortro-node");
+      const sortroHelper = helper.getNode("sortro-helper");
+      const delNode = helper.getNode("del-node");
+      const delHelper = helper.getNode("del-helper");
+
+      delHelper.on("input", () => {
+        done();
+      });
+
+      sortroHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.be.an.Array();
+          msg.payload.should.eql(["1", "2", "3"]);
+          delNode.receive({ topic: "test:key:sortro" });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      rpushHelper.on("input", () => {
+        sortroNode.receive({ topic: "test:key:sortro" });
+      });
+
+      rpushNode.receive({
+        topic: "test:key:sortro",
+        payload: ["3", "1", "2"],
+      });
+    });
+  });
+
   it("should RANDOMKEY return a random existing key", function (done) {
     const flow = [
       configNode,

@@ -1152,6 +1152,94 @@ describe("String commands", function () {
     });
   });
 
+  it("should LCS return the longest common subsequence of two strings", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "set1-node",
+        type: "redis-command",
+        server: "config1",
+        command: "SET",
+        name: "SET1",
+        topic: "",
+        params: "[]",
+        wires: [["set1-helper"]],
+      },
+      { id: "set1-helper", type: "helper" },
+      {
+        id: "set2-node",
+        type: "redis-command",
+        server: "config1",
+        command: "SET",
+        name: "SET2",
+        topic: "",
+        params: "[]",
+        wires: [["set2-helper"]],
+      },
+      { id: "set2-helper", type: "helper" },
+      {
+        id: "lcs-node",
+        type: "redis-command",
+        server: "config1",
+        command: "LCS",
+        name: "LCS",
+        topic: "",
+        params: "[]",
+        wires: [["lcs-helper"]],
+      },
+      { id: "lcs-helper", type: "helper" },
+      {
+        id: "del-node",
+        type: "redis-command",
+        server: "config1",
+        command: "DEL",
+        name: "DEL",
+        topic: "",
+        params: "[]",
+        wires: [["del-helper"]],
+      },
+      { id: "del-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const set1Node = helper.getNode("set1-node");
+      const set1Helper = helper.getNode("set1-helper");
+      const set2Node = helper.getNode("set2-node");
+      const set2Helper = helper.getNode("set2-helper");
+      const lcsNode = helper.getNode("lcs-node");
+      const lcsHelper = helper.getNode("lcs-helper");
+      const delNode = helper.getNode("del-node");
+      const delHelper = helper.getNode("del-helper");
+
+      delHelper.on("input", () => {
+        done();
+      });
+
+      lcsHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.equal("mytext");
+          delNode.receive({
+            payload: ["test:str:lcs1", "test:str:lcs2"],
+          });
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      set2Helper.on("input", () => {
+        lcsNode.receive({
+          payload: ["test:str:lcs1", "test:str:lcs2"],
+        });
+      });
+
+      set1Helper.on("input", () => {
+        set2Node.receive({ topic: "test:str:lcs2", payload: "mynewtext" });
+      });
+
+      set1Node.receive({ topic: "test:str:lcs1", payload: "ohmytext" });
+    });
+  });
+
   it("should SUBSTR (alias for GETRANGE) return a substring", function (done) {
     const flow = [
       configNode,
