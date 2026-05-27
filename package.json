@@ -45,6 +45,6 @@
   },
   "dependencies": {
     "async": "^3.2.6",
-    "ioredis": "^5.10.1"
+    "ioredis": "^5.11.0"
   }
 }
