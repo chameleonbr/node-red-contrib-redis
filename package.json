@@ -4,6 +4,7 @@
   "description": "Node Red client for Redis with pub/sub, list, lua scripting  and other commands support.",
   "main": "redis.js",
   "scripts": {
+    "prepare": "husky",
     "test": "mocha \"test/**/*_spec.js\""
   },
   "repository": {
@@ -35,9 +36,12 @@
     }
   ],
   "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.5",
     "mocha": "^11.7.6",
     "node-red": "^4.1.10",
-    "node-red-node-test-helper": "^0.3.6"
+    "node-red-node-test-helper": "^0.3.6",
+    "prettier": "^3.8.3"
   },
   "dependencies": {
     "async": "^3.2.6",
