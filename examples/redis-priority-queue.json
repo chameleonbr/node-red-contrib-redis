@@ -1,0 +1,93 @@
+[
+    {
+        "id": "dd10bc9deadcb001",
+        "type": "redis-in",
+        "z": "dd00de2a9d051600",
+        "server": "dd00055b7cab2800",
+        "command": "bzpopmin",
+        "name": "Consume highest priority",
+        "topic": "jobs:priority",
+        "obj": false,
+        "timeout": 0,
+        "groupname": "",
+        "consumername": "",
+        "x": 230,
+        "y": 300,
+        "wires": [
+            [
+                "dd10bc9deadcb002"
+            ]
+        ]
+    },
+    {
+        "id": "dd10bc9deadcb002",
+        "type": "debug",
+        "z": "dd00de2a9d051600",
+        "name": "Print job",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 450,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "dd10bc9deadcb003",
+        "type": "inject",
+        "z": "dd00de2a9d051600",
+        "name": "Enqueue job",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{\"score\": 5, \"member\": \"process-report\"}",
+        "payloadType": "json",
+        "x": 290,
+        "y": 400,
+        "wires": [
+            [
+                "dd10bc9deadcb004"
+            ]
+        ]
+    },
+    {
+        "id": "dd10bc9deadcb004",
+        "type": "redis-out",
+        "z": "dd00de2a9d051600",
+        "server": "dd00055b7cab2800",
+        "command": "zadd",
+        "name": "Produce job",
+        "topic": "jobs:priority",
+        "obj": false,
+        "x": 490,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "dd00055b7cab2800",
+        "type": "redis-config",
+        "name": "Local",
+        "options": "{}",
+        "cluster": false,
+        "optionsType": "json"
+    },
+    {
+        "id": "dd00abb97799ed00",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-redis": "2.0.0"
+        }
+    }
+]

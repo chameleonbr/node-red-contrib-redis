@@ -143,13 +143,18 @@ function RedisConfig(n) {
                     }
                 })
                 .catch(function (err) {
-                    if (running) {
+                    if (!running) return;
+                    if (err.message && err.message.startsWith('NOGROUP')) {
+                        node.warn('Consumer group "' + node.groupname + '" not found on stream "' + stream + '". Retrying in 2s — run the setup step to create it.');
+                        setTimeout(function () { if (running) cb(null); }, 2000);
+                    } else {
                         node.error(err, { topic: node.topic });
                         running = false;
+                        cb(err);
                     }
-                    cb(err);
                 });
-            }
+            },
+            function () {} // absorb async.whilst completion to prevent uncaught exceptions
         );
     }
 
@@ -161,19 +166,25 @@ function RedisConfig(n) {
         (cb) => {
           client[node.command](node.topic, Number(node.timeout))
             .then((data) => {
-              if (data !== null && data.length == 2) {
+              if (data !== null && data.length >= 2) {
                 var payload = null;
+                var topic = data[0] || node.topic;
                 try {
-                  if(node.obj){
+                  if (node.command === 'bzpopmin' || node.command === 'bzpopmax') {
+                    // data: [key, member, score]
+                    let member = data[1];
+                    if (node.obj) { try { member = JSON.parse(data[1]); } catch(e) {} }
+                    payload = { member: member, score: parseFloat(data[2]) };
+                  } else if (node.obj) {
                     payload = JSON.parse(data[1]);
-                  }else{
+                  } else {
                     payload = data[1];
                   }
                 } catch (err) {
                   payload = data[1];
                 } finally {
                   node.send({
-                    topic: node.topic,
+                    topic: topic,
                     payload: payload,
                   });
                 }
@@ -228,9 +239,31 @@ function RedisConfig(n) {
         done(new Error("Missing topic, please send topic on msg or set Topic on node."));
       } else {
         try {
-          if(node.obj){
+          if (node.command === 'xadd') {
+            let fields;
+            const p = msg.payload;
+            if (p && typeof p === 'object' && !Array.isArray(p)) {
+              fields = Object.entries(p).reduce((acc, pair) => acc.concat(pair), []);
+            } else if (Array.isArray(p)) {
+              fields = p;
+            } else {
+              fields = ['value', p != null ? String(p) : ''];
+            }
+            client.xadd(topic, '*', ...fields);
+          } else if (node.command === 'zadd') {
+            const p = msg.payload;
+            if (p && typeof p === 'object' && !Array.isArray(p) && 'score' in p) {
+              const member = node.obj ? JSON.stringify(p.member) : String(p.member);
+              client.zadd(topic, p.score, member);
+            } else if (Array.isArray(p)) {
+              client.zadd(topic, ...p);
+            } else {
+              done(new Error("zadd requires payload {score, member} or [score, member, ...]"));
+              return;
+            }
+          } else if (node.obj) {
             client[node.command](topic, JSON.stringify(msg.payload));
-          }else{
+          } else {
             client[node.command](topic, msg.payload);
           }
           done();
