@@ -89,6 +89,20 @@
         },
         label: function () {
             return this.name || this.topic || "redis in";
+        },
+        oneditprepare: function () {
+            function toggleXreadgroupFields() {
+                var cmd = $("#node-input-command").val();
+                if (cmd === "xreadgroup") {
+                    $("#node-input-groupname-row").show();
+                    $("#node-input-consumername-row").show();
+                } else {
+                    $("#node-input-groupname-row").hide();
+                    $("#node-input-consumername-row").hide();
+                }
+            }
+            toggleXreadgroupFields();
+            $("#node-input-command").on("change", toggleXreadgroupFields);
         }
     });
 </script>
@@ -109,20 +123,20 @@
     <div class="form-row">
         <label for="node-input-command"><i class="fa fa-unlock"></i> Method</label>
         <select id="node-input-command">
-                <div class="form-row">
-                    <label for="node-input-groupname"><i class="fa fa-users"></i> Group</label>
-                    <input type="text" id="node-input-groupname" placeholder="Consumer group name">
-                </div>
-                <div class="form-row">
-                    <label for="node-input-consumername"><i class="fa fa-user"></i> Consumer</label>
-                    <input type="text" id="node-input-consumername" placeholder="Consumer name">
-                </div>
-            <option value="blpop" selected>BLPOP</option>
+            <option value="blpop">BLPOP</option>
             <option value="brpop">BRPOP</option>
             <option value="subscribe">SUBSCRIBE</option>
             <option value="psubscribe">PSUBSCRIBE</option>
             <option value="xreadgroup">XREADGROUP</option>
         </select>
+    </div>
+    <div class="form-row" id="node-input-groupname-row">
+        <label for="node-input-groupname"><i class="fa fa-users"></i> Group</label>
+        <input type="text" id="node-input-groupname" placeholder="Consumer group name">
+    </div>
+    <div class="form-row" id="node-input-consumername-row">
+        <label for="node-input-consumername"><i class="fa fa-user"></i> Consumer</label>
+        <input type="text" id="node-input-consumername" placeholder="Consumer name">
     </div>
     <div class="form-row">
         <label for="node-input-timeout"><i class="fa fa-clock-o"></i> Timeout</label>
