@@ -125,18 +125,16 @@ This configuration node is shared by all redis nodes that reference it.</p>
             return this.name || this.topic || "redis in";
         },
         oneditprepare: function () {
-            function toggleXreadgroupFields() {
+            function toggleFields() {
                 var cmd = $("#node-input-command").val();
-                if (cmd === "xreadgroup") {
-                    $("#node-input-groupname-row").show();
-                    $("#node-input-consumername-row").show();
-                } else {
-                    $("#node-input-groupname-row").hide();
-                    $("#node-input-consumername-row").hide();
-                }
+                var isXreadgroup = cmd === "xreadgroup";
+                var hasPubSub = cmd === "subscribe" || cmd === "psubscribe";
+                $("#node-input-groupname-row").toggle(isXreadgroup);
+                $("#node-input-consumername-row").toggle(isXreadgroup);
+                $("#node-input-timeout-row").toggle(!hasPubSub && !isXreadgroup);
             }
-            toggleXreadgroupFields();
-            $("#node-input-command").on("change", toggleXreadgroupFields);
+            toggleFields();
+            $("#node-input-command").on("change", toggleFields);
         }
     });
 </script>
@@ -174,7 +172,7 @@ This configuration node is shared by all redis nodes that reference it.</p>
         <label for="node-input-consumername"><i class="fa fa-user"></i> Consumer</label>
         <input type="text" id="node-input-consumername" placeholder="Consumer name">
     </div>
-    <div class="form-row">
+    <div class="form-row" id="node-input-timeout-row">
         <label for="node-input-timeout"><i class="fa fa-clock-o"></i> Timeout</label>
         <input type="text" id="node-input-timeout" placeholder="Timeout">
     </div>
