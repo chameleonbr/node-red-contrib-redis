@@ -115,10 +115,18 @@ This configuration node is shared by all redis nodes that reference it.</p>
                 validate: RED.validators.number()
             },
             groupname: {
-                value: ""
+                value: "",
+                validate: function (v) {
+                    var cmd = $("#node-input-command").val() || this.command;
+                    return cmd !== "xreadgroup" || (v && v.trim() !== "");
+                }
             },
             consumername: {
-                value: ""
+                value: "",
+                validate: function (v) {
+                    var cmd = $("#node-input-command").val() || this.command;
+                    return cmd !== "xreadgroup" || (v && v.trim() !== "");
+                }
             }
         },
         label: function () {
