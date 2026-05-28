@@ -1,7 +1,6 @@
 module.exports = function (RED) {
   "use strict";
   const Redis = require("ioredis");
-  const async = require("async");
   let connections = {};
   let usedConn = {};
 
@@ -106,11 +105,10 @@ function RedisConfig(n) {
       });
     } else if (node.command === 'xreadgroup') {
         const [stream, lastid] = node.topic.split(':');
-        async.whilst(
-            function test(cb) { cb(null, running); },
-            function iter(cb) {
-                client.xreadgroup('GROUP', node.groupname, node.consumername, 'BLOCK', 0, 'STREAMS', stream, lastid)
-                .then(function (data) {
+        (async () => {
+            while (running) {
+                try {
+                    const data = await client.xreadgroup('GROUP', node.groupname, node.consumername, 'BLOCK', 0, 'STREAMS', stream, lastid);
                     if (data) {
                         data.forEach(function (streamResult) {
                             const streamName = streamResult[0];
@@ -127,7 +125,6 @@ function RedisConfig(n) {
                                 } else {
                                     payload = keyValues;
                                 }
-
                                 node.send({
                                     stream: streamName,
                                     messageId: messageId,
@@ -136,68 +133,54 @@ function RedisConfig(n) {
                             });
                         });
                     }
-                    if (running) {
-                        process.nextTick(function() {
-                            cb(null);
-                        });
-                    }
-                })
-                .catch(function (err) {
+                } catch (err) {
                     if (!running) return;
                     if (err.message && err.message.startsWith('NOGROUP')) {
                         node.warn('Consumer group "' + node.groupname + '" not found on stream "' + stream + '". Retrying in 2s — run the setup step to create it.');
-                        setTimeout(function () { if (running) cb(null); }, 2000);
+                        await new Promise(resolve => setTimeout(resolve, 2000));
                     } else {
                         node.error(err, { topic: node.topic });
                         running = false;
-                        cb(err);
                     }
-                });
-            },
-            function () {} // absorb async.whilst completion to prevent uncaught exceptions
-        );
+                }
+            }
+        })();
     }
 
     else {
-      async.whilst(
-        (cb) => {
-          cb(null, running);
-        },
-        (cb) => {
-          client[node.command](node.topic, Number(node.timeout))
-            .then((data) => {
-              if (data !== null && data.length >= 2) {
-                var payload = null;
-                var topic = data[0] || node.topic;
-                try {
-                  if (node.command === 'bzpopmin' || node.command === 'bzpopmax') {
-                    // data: [key, member, score]
-                    let member = data[1];
-                    if (node.obj) { try { member = JSON.parse(data[1]); } catch(e) {} }
-                    payload = { member: member, score: parseFloat(data[2]) };
-                  } else if (node.obj) {
-                    payload = JSON.parse(data[1]);
-                  } else {
-                    payload = data[1];
-                  }
-                } catch (err) {
+      (async () => {
+        while (running) {
+          try {
+            const data = await client[node.command](node.topic, Number(node.timeout));
+            if (data !== null && data.length >= 2) {
+              var payload = null;
+              var topic = data[0] || node.topic;
+              try {
+                if (node.command === 'bzpopmin' || node.command === 'bzpopmax') {
+                  // data: [key, member, score]
+                  let member = data[1];
+                  if (node.obj) { try { member = JSON.parse(data[1]); } catch(e) {} }
+                  payload = { member: member, score: parseFloat(data[2]) };
+                } else if (node.obj) {
+                  payload = JSON.parse(data[1]);
+                } else {
                   payload = data[1];
-                } finally {
-                  node.send({
-                    topic: topic,
-                    payload: payload,
-                  });
                 }
+              } catch (err) {
+                payload = data[1];
+              } finally {
+                node.send({
+                  topic: topic,
+                  payload: payload,
+                });
               }
-              cb(null);
-            })
-            .catch((e) => {
-              RED.log.info(e.message);
-              running = false;
-            });
-        },
-        () => {}
-      );
+            }
+          } catch (e) {
+            RED.log.info(e.message);
+            running = false;
+          }
+        }
+      })();
     }
     node.status({
       fill: "green",
