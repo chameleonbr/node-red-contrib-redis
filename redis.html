@@ -49,6 +49,40 @@
     </div>
 </script>
 
+<script type="text/x-red" data-help-name="redis-config">
+<p>Defines a connection to a Redis server or cluster.
+This configuration node is shared by all redis nodes that reference it.</p>
+
+<h3>Properties</h3>
+<dl class="message-properties">
+    <dt>Name</dt>
+    <dd>A display label for this connection, shown in the node editor and palette.</dd>
+    <dt>Options <span class="property-type">JSON</span></dt>
+    <dd>
+        Connection options passed directly to
+        <a href="https://github.com/redis/ioredis" target="_blank">ioredis</a>.
+        Must be a valid JSON object (or an array when <strong>Cluster</strong> is enabled).
+        The default <code>{}</code> connects to <code>127.0.0.1:6379</code> with no
+        authentication.<br><br>
+        Common options:
+        <ul>
+            <li><code>{"host": "my-redis", "port": 6379}</code></li>
+            <li><code>{"host": "redis", "port": 6379, "password": "secret"}</code></li>
+            <li><code>{"host": "redis", "port": 6380, "tls": {}}</code> &mdash; TLS/SSL</li>
+            <li><code>{"host": "redis", "db": 2}</code> &mdash; select database 2</li>
+        </ul>
+        See all available options in the
+        <a href="https://github.com/redis/ioredis#connect-to-redis" target="_blank">&#8599; ioredis connection documentation</a>.
+    </dd>
+    <dt>Cluster</dt>
+    <dd>Enable when connecting to a
+        <a href="https://redis.io/docs/management/scaling/" target="_blank">Redis Cluster</a>.
+        In cluster mode <strong>Options</strong> must be a JSON <em>array</em> of seed nodes:<br>
+        <code>[{"host":"node1","port":6379},{"host":"node2","port":6380}]</code>
+    </dd>
+</dl>
+</script>
+
 <script type="text/javascript">
     /*global RED*/
     RED.nodes.registerType('redis-in', {
@@ -151,10 +185,139 @@
 </script>
 
 <script type="text/x-red" data-help-name="redis-in">
-    <p>Redis in</p>
-    <p>Acts as Subscriber, using BLPOP, BRPOP, SUBSCRIBE, PSUBSCRIBE or XREADGROUP</p>
-    <p>The msg.topic is pattern on all methods, separated by spaces.</p>
-    <p>Note: Only PSUBSCRIBE supports patterns with wildcards.</p>
+<p>Listens to Redis and emits a message for every value received. The node opens a
+dedicated connection that stays alive until the flow is stopped or redeployed.</p>
+
+<h3>Outputs</h3>
+<dl class="message-properties">
+    <dt>topic <span class="property-type">string</span></dt>
+    <dd>The Redis key or channel the value arrived on.</dd>
+    <dt>payload <span class="property-type">string | number | object | array</span></dt>
+    <dd>The received value. JSON-parsed when <em>Parse payload from JSON Object</em> is enabled;
+        raw string otherwise.</dd>
+    <dt>pattern <span class="property-type">string</span></dt>
+    <dd><em>PSUBSCRIBE only.</em> The glob pattern that matched the incoming channel.</dd>
+    <dt>stream <span class="property-type">string</span></dt>
+    <dd><em>XREADGROUP only.</em> The stream key the entry was read from.</dd>
+    <dt>messageId <span class="property-type">string</span></dt>
+    <dd><em>XREADGROUP only.</em> The stream entry ID, e.g. <code>1718000000000-0</code>.</dd>
+</dl>
+
+<h3>Properties</h3>
+<dl class="message-properties">
+    <dt>Server</dt>
+    <dd>The <em>redis-config</em> node that defines the connection.</dd>
+    <dt>Topic</dt>
+    <dd>The Redis key, channel, or pattern to listen on.
+        The exact meaning depends on the selected <strong>Method</strong> — see below.</dd>
+    <dt>Method</dt>
+    <dd>The Redis command used to receive data.</dd>
+    <dt>Group <span class="property-type">XREADGROUP only</span></dt>
+    <dd>Consumer group name. The group must already exist on the stream
+        (create it with <code>XGROUP CREATE</code>).</dd>
+    <dt>Consumer <span class="property-type">XREADGROUP only</span></dt>
+    <dd>A unique name for this consumer within the group. Multiple nodes in the same
+        group with different consumer names share the stream workload.</dd>
+    <dt>Timeout <span class="property-type">seconds · BLPOP / BRPOP / BZPOPMIN / BZPOPMAX only</span></dt>
+    <dd>How long to block waiting for data. <code>0</code> blocks indefinitely.
+        Ignored for pub/sub and stream commands.</dd>
+    <dt>Parse payload from JSON Object</dt>
+    <dd>When enabled the node calls <code>JSON.parse()</code> on the received string.
+        If parsing fails the raw string is forwarded unchanged.</dd>
+</dl>
+
+<h3>Methods</h3>
+
+<h4>BLPOP &mdash; Blocking List Pop (left) <em>since Redis 2.0</em></h4>
+<p>Blocks until a value is available at the <strong>head</strong> of the list at <strong>Topic</strong>,
+then removes and returns it. Use with a <em>redis-out</em> RPUSH producer for a reliable FIFO queue.</p>
+<ul>
+    <li><strong>Topic:</strong> a single list key, e.g. <code>jobs:queue</code></li>
+    <li><strong>Output:</strong> <code>msg.topic</code> = key name &nbsp;|&nbsp;
+        <code>msg.payload</code> = popped value</li>
+    <li><strong>Producer example:</strong> <code>RPUSH jobs:queue "task-1"</code></li>
+</ul>
+<p><a href="https://redis.io/commands/blpop/" target="_blank">&#8599; BLPOP reference</a></p>
+
+<h4>BRPOP &mdash; Blocking List Pop (right) <em>since Redis 2.0</em></h4>
+<p>Same as BLPOP but removes from the <strong>tail</strong> of the list.
+Pair with a LPUSH producer for a FIFO queue, or with RPUSH for a LIFO stack.</p>
+<ul>
+    <li><strong>Topic:</strong> a single list key, e.g. <code>tasks:fifo</code></li>
+    <li><strong>Output:</strong> <code>msg.topic</code> = key name &nbsp;|&nbsp;
+        <code>msg.payload</code> = popped value</li>
+</ul>
+<p><a href="https://redis.io/commands/brpop/" target="_blank">&#8599; BRPOP reference</a></p>
+
+<h4>BZPOPMIN &mdash; Blocking Sorted Set Pop (lowest score) <em>since Redis 5.0</em></h4>
+<p>Blocks until a member is available in the sorted set at <strong>Topic</strong>,
+then removes and returns the member with the <strong>lowest</strong> score.
+Use for priority queues where a lower score means higher priority.</p>
+<ul>
+    <li><strong>Topic:</strong> a single sorted set key, e.g. <code>jobs:priority</code></li>
+    <li><strong>Output:</strong> <code>msg.topic</code> = key name &nbsp;|&nbsp;
+        <code>msg.payload</code> = <code>{ member, score }</code>
+        (<code>score</code> is a JavaScript number)</li>
+    <li><strong>Producer example:</strong> use <em>redis-out</em> ZADD with
+        <code>{ "score": 5, "member": "send-email" }</code></li>
+</ul>
+<p><a href="https://redis.io/commands/bzpopmin/" target="_blank">&#8599; BZPOPMIN reference</a></p>
+
+<h4>BZPOPMAX &mdash; Blocking Sorted Set Pop (highest score) <em>since Redis 5.0</em></h4>
+<p>Same as BZPOPMIN but removes the member with the <strong>highest</strong> score first.
+Use when a higher score means higher priority.</p>
+<ul>
+    <li><strong>Topic:</strong> a single sorted set key, e.g. <code>jobs:urgency</code></li>
+    <li><strong>Output:</strong> <code>msg.topic</code> = key name &nbsp;|&nbsp;
+        <code>msg.payload</code> = <code>{ member, score }</code></li>
+</ul>
+<p><a href="https://redis.io/commands/bzpopmax/" target="_blank">&#8599; BZPOPMAX reference</a></p>
+
+<h4>SUBSCRIBE &mdash; Pub/Sub Channel Subscription <em>since Redis 2.0</em></h4>
+<p>Subscribes to an exact Redis Pub/Sub <strong>channel</strong>. Every message published
+to that channel is forwarded downstream. The connection stays open until the flow stops.</p>
+<ul>
+    <li><strong>Topic:</strong> exact channel name, e.g. <code>sensors:temperature</code></li>
+    <li><strong>Output:</strong> <code>msg.topic</code> = channel name &nbsp;|&nbsp;
+        <code>msg.payload</code> = message</li>
+    <li><strong>Publisher example:</strong> <code>PUBLISH sensors:temperature "22.5"</code></li>
+</ul>
+<p><a href="https://redis.io/commands/subscribe/" target="_blank">&#8599; SUBSCRIBE reference</a></p>
+
+<h4>PSUBSCRIBE &mdash; Pub/Sub Pattern Subscription <em>since Redis 2.0</em></h4>
+<p>Like SUBSCRIBE but matches channels with a <strong>glob-style pattern</strong>.
+Supported wildcards: <code>*</code> (any sequence), <code>?</code> (single character),
+<code>[abc]</code> (character class).</p>
+<ul>
+    <li><strong>Topic:</strong> glob pattern, e.g. <code>events:*</code></li>
+    <li><strong>Output:</strong> <code>msg.pattern</code> = matched pattern &nbsp;|&nbsp;
+        <code>msg.topic</code> = actual channel &nbsp;|&nbsp; <code>msg.payload</code> = message</li>
+    <li><strong>Example:</strong> pattern <code>sensor:?:temp</code> matches
+        <code>sensor:A:temp</code> and <code>sensor:B:temp</code></li>
+</ul>
+<p><a href="https://redis.io/commands/psubscribe/" target="_blank">&#8599; PSUBSCRIBE reference</a></p>
+
+<h4>XREADGROUP &mdash; Stream Consumer Group Read <em>since Redis 5.0</em></h4>
+<p>Reads new messages from a Redis Stream via a consumer group. Each message is delivered
+to exactly one consumer in the group, enabling parallel processing across multiple nodes.
+If the consumer group does not exist, the node retries automatically every 2 seconds
+while logging a warning &mdash; create the group with <code>XGROUP CREATE</code> first.</p>
+<ul>
+    <li><strong>Topic format:</strong> <code>&lt;stream-key&gt;:&gt;</code><br>
+        The stream key and start ID are separated by the first <code>:</code>.
+        Use <code>&gt;</code> as the ID to receive only undelivered messages.<br>
+        <em>Important:</em> the stream key itself must not contain a colon.</li>
+    <li><strong>Group:</strong> consumer group name (must exist before the node starts)</li>
+    <li><strong>Consumer:</strong> this consumer&rsquo;s name within the group</li>
+    <li><strong>Output (Parse JSON on):</strong> <code>msg.stream</code> = stream key &nbsp;|&nbsp;
+        <code>msg.messageId</code> = entry ID &nbsp;|&nbsp;
+        <code>msg.payload</code> = object with all field&ndash;value pairs</li>
+    <li><strong>Output (Parse JSON off):</strong> <code>msg.payload</code> = flat
+        <code>["field", "value", ...]</code> array</li>
+    <li><strong>Setup example:</strong>
+        <code>XGROUP CREATE mystream workers $ MKSTREAM</code></li>
+</ul>
+<p><a href="https://redis.io/commands/xreadgroup/" target="_blank">&#8599; XREADGROUP reference</a></p>
 </script>
 
 
@@ -224,10 +387,111 @@
 </script>
 
 <script type="text/x-red" data-help-name="redis-out">
-    <p>Redis out</p>
-    <p>Acts as Publisher, using RPUSH, LPUSH or PUBLISH</p>
-    <p>The msg.topic is key name to publish.</p>
-    <p>Note: Output only works on PUBLISH and return number of subscribers.</p>
+<p>Receives a message and writes its payload to Redis using the selected command.
+The node has no output — it is a terminal node.</p>
+
+<h3>Inputs</h3>
+<dl class="message-properties">
+    <dt>topic <span class="property-type">string (optional)</span></dt>
+    <dd>The Redis key or channel to write to.
+        Overrides the node&rsquo;s <strong>Topic</strong> setting when provided and non-empty.</dd>
+    <dt>payload <span class="property-type">any</span></dt>
+    <dd>The value to write. The exact format expected depends on the selected
+        <strong>Method</strong> &mdash; see below.</dd>
+</dl>
+
+<h3>Properties</h3>
+<dl class="message-properties">
+    <dt>Server</dt>
+    <dd>The <em>redis-config</em> node that defines the connection.</dd>
+    <dt>Topic</dt>
+    <dd>The Redis key or channel to write to.
+        Can be overridden per-message via <code>msg.topic</code>.</dd>
+    <dt>Method</dt>
+    <dd>The Redis write command to execute.</dd>
+    <dt>Serialize payload to JSON Object</dt>
+    <dd>When enabled, <code>msg.payload</code> is passed through <code>JSON.stringify()</code>
+        before being written (applies to list and pub/sub commands).
+        Disable to write the raw value as-is.</dd>
+</dl>
+
+<h3>Methods</h3>
+
+<h4>RPUSH &mdash; Push to Right of List <em>since Redis 1.0</em></h4>
+<p>Appends <code>msg.payload</code> to the <strong>tail</strong> of the list at <strong>Topic</strong>.
+Creates the list if it does not exist. Pair with a <em>redis-in</em> BLPOP consumer for a FIFO queue.</p>
+<ul>
+    <li><strong>Payload:</strong> string or any serializable value</li>
+    <li><strong>Example:</strong> Topic <code>jobs:queue</code>, payload <code>"task-1"</code>
+        &rarr; <code>RPUSH jobs:queue "task-1"</code></li>
+</ul>
+<p><a href="https://redis.io/commands/rpush/" target="_blank">&#8599; RPUSH reference</a></p>
+
+<h4>LPUSH &mdash; Push to Left of List <em>since Redis 1.0</em></h4>
+<p>Prepends <code>msg.payload</code> to the <strong>head</strong> of the list at <strong>Topic</strong>.
+Creates the list if it does not exist. Pair with a <em>redis-in</em> BRPOP consumer for FIFO,
+or BLPOP for a LIFO stack.</p>
+<ul>
+    <li><strong>Payload:</strong> string or any serializable value</li>
+    <li><strong>Example:</strong> Topic <code>tasks:stack</code>, payload <code>"item"</code>
+        &rarr; <code>LPUSH tasks:stack "item"</code></li>
+</ul>
+<p><a href="https://redis.io/commands/lpush/" target="_blank">&#8599; LPUSH reference</a></p>
+
+<h4>RPUSHX &mdash; Push to Right (if list exists) <em>since Redis 2.2</em></h4>
+<p>Same as RPUSH but silently does nothing if the key does not already exist.
+Useful as a guard to avoid creating orphaned queues.</p>
+<ul>
+    <li><strong>Payload:</strong> string or any serializable value</li>
+</ul>
+<p><a href="https://redis.io/commands/rpushx/" target="_blank">&#8599; RPUSHX reference</a></p>
+
+<h4>LPUSHX &mdash; Push to Left (if list exists) <em>since Redis 2.2</em></h4>
+<p>Same as LPUSH but silently does nothing if the key does not already exist.</p>
+<p><a href="https://redis.io/commands/lpushx/" target="_blank">&#8599; LPUSHX reference</a></p>
+
+<h4>PUBLISH &mdash; Pub/Sub Publish <em>since Redis 2.0</em></h4>
+<p>Posts <code>msg.payload</code> to the Pub/Sub channel specified by <strong>Topic</strong>.
+All active SUBSCRIBE or PSUBSCRIBE subscribers receive the message instantly.
+Messages are discarded if no subscribers are connected at the time of publish.</p>
+<ul>
+    <li><strong>Payload:</strong> string or JSON-serialized value</li>
+    <li><strong>Example:</strong> Topic <code>events:news</code>,
+        payload <code>{"headline":"Breaking"}</code>
+        (with <em>Serialize</em> on)</li>
+</ul>
+<p><a href="https://redis.io/commands/publish/" target="_blank">&#8599; PUBLISH reference</a></p>
+
+<h4>XADD &mdash; Append to Stream <em>since Redis 5.0</em></h4>
+<p>Appends <code>msg.payload</code> as a new entry to the stream at <strong>Topic</strong>.
+Creates the stream automatically if it does not exist.
+Each entry receives an auto-generated ID (<code>&lt;ms&gt;-&lt;seq&gt;</code>).
+Pair with a <em>redis-in</em> XREADGROUP consumer group.</p>
+<ul>
+    <li><strong>Object payload (recommended):</strong> each key becomes a field name &mdash;
+        <code>{"temp": 22, "unit": "C"}</code> produces fields <code>temp=22 unit=C</code></li>
+    <li><strong>Flat array payload:</strong> alternating field&ndash;value pairs &mdash;
+        <code>["temp", "22", "unit", "C"]</code></li>
+    <li><strong>String / number payload:</strong> stored as a single field named
+        <code>value</code>, e.g. <code>value=sensor-reading</code></li>
+    <li><em>Note:</em> the stream key in <strong>Topic</strong> must not contain a colon
+        (<code>:</code>) when paired with an XREADGROUP consumer.</li>
+</ul>
+<p><a href="https://redis.io/commands/xadd/" target="_blank">&#8599; XADD reference</a></p>
+
+<h4>ZADD &mdash; Add to Sorted Set <em>since Redis 1.2</em></h4>
+<p>Adds <code>msg.payload</code> to the sorted set at <strong>Topic</strong> with a numeric score.
+If the member already exists its score is updated.
+Pair with a <em>redis-in</em> BZPOPMIN or BZPOPMAX consumer for priority queues.</p>
+<ul>
+    <li><strong>Object payload (recommended):</strong>
+        <code>{"score": 5, "member": "task-name"}</code><br>
+        When <em>Serialize</em> is enabled, the member value is stored as a JSON string,
+        allowing object members to be round-tripped through the queue.</li>
+    <li><strong>Flat array payload:</strong> alternating score&ndash;member pairs &mdash;
+        <code>[10, "alpha", 20, "beta"]</code> adds two members in one call</li>
+</ul>
+<p><a href="https://redis.io/commands/zadd/" target="_blank">&#8599; ZADD reference</a></p>
 </script>
 
 <script type="text/javascript">
@@ -708,8 +972,82 @@
 </script>
 
 <script type="text/x-red" data-help-name="redis-command">
-    <p>Redis Command</p>
-    <p>Execute command inside Redis sending payload array as parameters and return the result as payload.</p>
+<p>Executes any Redis command and returns the result as <code>msg.payload</code>.
+Use this node for operations not covered by the dedicated <em>redis-in</em> and
+<em>redis-out</em> nodes, such as GET, SET, EXPIRE, HSET, or administrative commands.</p>
+
+<h3>Inputs</h3>
+<dl class="message-properties">
+    <dt>topic <span class="property-type">string (optional)</span></dt>
+    <dd>The primary Redis key. Overrides the node&rsquo;s <strong>Topic/Key</strong> setting.
+        Passed as the first argument after the command name.</dd>
+    <dt>payload <span class="property-type">string | number | array | object (optional)</span></dt>
+    <dd>Additional arguments for the command.
+        A JSON array is spread as individual arguments.
+        Overrides the node&rsquo;s static <strong>Params</strong> when provided.</dd>
+</dl>
+
+<h3>Outputs</h3>
+<dl class="message-properties">
+    <dt>payload <span class="property-type">string | number | array | null</span></dt>
+    <dd>The value returned by Redis for the command.</dd>
+</dl>
+
+<h3>Properties</h3>
+<dl class="message-properties">
+    <dt>Server</dt>
+    <dd>The <em>redis-config</em> node that defines the connection.</dd>
+    <dt>Topic / Key</dt>
+    <dd>The primary Redis key for the command.
+        Passed as the first positional argument.
+        Leave blank for commands that take no key
+        (e.g. <code>DBSIZE</code>, <code>INFO</code>, <code>PING</code>).</dd>
+    <dt>Command</dt>
+    <dd>The Redis command to run, selected from the dropdown.</dd>
+    <dt>Params <span class="property-type">JSON array</span></dt>
+    <dd>Static extra arguments as a JSON array.
+        Used only when <code>msg.payload</code> is absent or empty.
+        Example: <code>[60]</code> for the seconds argument of <code>EXPIRE</code>.</dd>
+    <dt>Block Commands</dt>
+    <dd>When checked, this node gets its own dedicated Redis connection instead of sharing
+        the common pooled connection. <strong>Required</strong> for commands that hold the
+        connection open: <code>BLPOP</code>, <code>BRPOP</code>, <code>BLMOVE</code>,
+        <code>BZPOPMIN</code>, <code>BZPOPMAX</code>, <code>BLMPOP</code>, etc.</dd>
+</dl>
+
+<h3>How arguments are assembled</h3>
+<p>The final Redis call is built from <strong>Command</strong> + <strong>Topic/Key</strong>
++ <strong>Payload / Params</strong>:</p>
+<ul>
+    <li>Topic present, payload present &rarr;
+        <code>COMMAND &lt;topic&gt; &lt;payload&gt;</code></li>
+    <li>Payload present, no topic &rarr;
+        <code>COMMAND &lt;payload&gt;</code></li>
+    <li>Neither present &rarr;
+        <code>COMMAND</code></li>
+</ul>
+<p>When payload is a JSON array each element is passed as a separate argument.</p>
+
+<h3>Examples</h3>
+<ul>
+    <li><strong>SET:</strong> Topic <code>mykey</code>, payload <code>"hello"</code>
+        &rarr; <code>SET mykey hello</code></li>
+    <li><strong>GET:</strong> Topic <code>mykey</code>, no payload
+        &rarr; <code>GET mykey</code></li>
+    <li><strong>EXPIRE:</strong> Topic <code>mykey</code>, payload <code>[60]</code>
+        &rarr; <code>EXPIRE mykey 60</code></li>
+    <li><strong>HSET:</strong> Topic <code>myhash</code>,
+        payload <code>["field1","val1","field2","val2"]</code>
+        &rarr; <code>HSET myhash field1 val1 field2 val2</code></li>
+    <li><strong>XGROUP CREATE:</strong> Command <code>XGROUP</code>, no topic,
+        payload <code>["CREATE","mystream","mygroup","0","MKSTREAM"]</code>
+        &rarr; <code>XGROUP CREATE mystream mygroup 0 MKSTREAM</code></li>
+    <li><strong>DBSIZE:</strong> Command <code>DBSIZE</code>, no topic, no payload
+        &rarr; <code>DBSIZE</code></li>
+</ul>
+
+<p>Full Redis command reference:
+<a href="https://redis.io/commands/" target="_blank">&#8599; redis.io/commands</a></p>
 </script>
 
 
@@ -828,13 +1166,71 @@
 </script>
 
 <script type="text/x-red" data-help-name="redis-lua-script">
-    <p>Redis Lua</p>
-    <p>Execute lua script inside Redis sending payload array as parameters and return the result as payload.</p>
-    <p>Options</p>
-    <p>Stored: Set if you want use SCRIPT LOAD and EVALSHA to run script</p>
-    <p>Keys: Number of keys that you send to the lua script</p>
-    <p>Script: Lua script</p>
-    <p>Payload: you need send all keys before, after send all values.</p>
+<p>Executes a Lua script atomically inside Redis using <code>EVAL</code> or
+<code>EVALSHA</code>. Because Redis runs the script in a single step, it is
+ideal for read-modify-write operations that must not be interrupted by other clients.</p>
+
+<h3>Inputs</h3>
+<dl class="message-properties">
+    <dt>payload <span class="property-type">array</span></dt>
+    <dd>Arguments for the script, as a flat array.
+        The first <strong>Keys</strong> elements are mapped to <code>KEYS[1]</code>,
+        <code>KEYS[2]</code>, &hellip; inside the script.
+        All remaining elements become <code>ARGV[1]</code>, <code>ARGV[2]</code>, &hellip;<br>
+        Must be an array when <strong>Keys</strong> is greater than 0.</dd>
+</dl>
+
+<h3>Outputs</h3>
+<dl class="message-properties">
+    <dt>payload <span class="property-type">string | number | array | null</span></dt>
+    <dd>The value returned by the Lua script via <code>return</code>.</dd>
+</dl>
+
+<h3>Properties</h3>
+<dl class="message-properties">
+    <dt>Server</dt>
+    <dd>The <em>redis-config</em> node that defines the connection.</dd>
+    <dt>Stored Script</dt>
+    <dd>When enabled, the script is pre-loaded into Redis with <code>SCRIPT LOAD</code>
+        the first time the node deploys, and subsequent calls use <code>EVALSHA</code>
+        (the script&rsquo;s SHA-1 hash) instead of sending the full script text each time.
+        Reduces network traffic for large or frequently called scripts.</dd>
+    <dt>Keys <span class="property-type">number</span></dt>
+    <dd>How many elements at the start of <code>msg.payload</code> are Redis key names.
+        These become <code>KEYS[n]</code> in the script; the rest become
+        <code>ARGV[n]</code>. Set to <code>0</code> if the script uses no keys.</dd>
+    <dt>Lua Script</dt>
+    <dd>The Lua code to execute. The full Redis Lua environment is available,
+        including <code>redis.call()</code> (raises on error) and
+        <code>redis.pcall()</code> (returns error as table).</dd>
+    <dt>Block Commands</dt>
+    <dd>Forces a dedicated connection for this node instead of the shared pool.
+        Recommended when the script may hold the connection for an extended period.</dd>
+</dl>
+
+<h3>Examples</h3>
+
+<p><strong>Atomic get-and-delete</strong> &mdash; Keys: <code>1</code>,
+payload: <code>["mykey"]</code></p>
+<pre><code>local v = redis.call('GET', KEYS[1])
+redis.call('DEL', KEYS[1])
+return v</code></pre>
+
+<p><strong>Conditional increment</strong> &mdash; Keys: <code>1</code>,
+payload: <code>["counter", "100"]</code>
+(cap at 100 passed as ARGV[1])</p>
+<pre><code>local cur = tonumber(redis.call('GET', KEYS[1])) or 0
+local cap = tonumber(ARGV[1])
+if cur < cap then
+  return redis.call('INCR', KEYS[1])
+end
+return cur</code></pre>
+
+<p>
+    <a href="https://redis.io/commands/eval/" target="_blank">&#8599; EVAL reference</a>
+    &nbsp;&nbsp;
+    <a href="https://redis.io/docs/manual/programmability/eval-intro/" target="_blank">&#8599; Redis Lua scripting guide</a>
+</p>
 </script>
 
 
@@ -894,8 +1290,53 @@
 </script>
 
 <script type="text/x-red" data-help-name="redis-instance">
-    <p>Redis Instance</p>
-    <p>Injects a Redis connection on flow or global context.</p> 
-    <p>The Topic is the var name of redis.</p>
-    <p></p>
+<p>Stores a raw <a href="https://github.com/redis/ioredis" target="_blank">ioredis</a>
+client instance into Node-RED&rsquo;s flow or global context so that
+<em>Function</em> nodes and other context-aware nodes can call any Redis command
+directly without going through a dedicated redis node.</p>
+
+<h3>Properties</h3>
+<dl class="message-properties">
+    <dt>Server</dt>
+    <dd>The <em>redis-config</em> node that defines the connection.</dd>
+    <dt>Topic</dt>
+    <dd>The context variable name under which the ioredis client is stored.
+        For example, setting this to <code>redis</code> makes the client
+        available as <code>flow.get("redis")</code> or
+        <code>global.get("redis")</code>.</dd>
+    <dt>Context</dt>
+    <dd>
+        <ul>
+            <li><strong>Flow</strong> &mdash; the client is accessible to all nodes
+                in the same flow tab via <code>flow.get("&lt;topic&gt;")</code>.</li>
+            <li><strong>Global</strong> &mdash; the client is accessible to every
+                flow in the Node-RED instance via
+                <code>global.get("&lt;topic&gt;")</code>.</li>
+        </ul>
+    </dd>
+</dl>
+
+<h3>Usage in a Function node</h3>
+<pre><code>// Retrieve the shared client stored by redis-instance
+const redis = flow.get("redis");
+if (!redis) { node.error("Redis client not ready"); return; }
+
+// Any ioredis method is available
+await redis.set("mykey", "hello");
+const value = await redis.get("mykey");
+msg.payload = value;
+return msg;</code></pre>
+
+<p><strong>Notes</strong></p>
+<ul>
+    <li>The client is placed in context when the node deploys and removed when
+        the flow stops. Always guard against <code>null</code> before use.</li>
+    <li>The connection is shared with other nodes that reference the same
+        <em>redis-config</em>. Avoid using blocking commands
+        (<code>BLPOP</code>, <code>BRPOP</code>, etc.) on the shared client
+        as they will block all other operations on that connection.</li>
+    <li>All ioredis methods and options are available. See the
+        <a href="https://github.com/redis/ioredis#basic-usage" target="_blank">&#8599; ioredis documentation</a>
+        for the full API.</li>
+</ul>
 </script>
