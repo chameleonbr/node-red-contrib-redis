@@ -296,7 +296,9 @@ describe("node connection status", function () {
             });
         });
 
-        it("redis-in (blpop) calls quit() on shutdown", function (done) {
+        it("redis-in (blpop) skips quit() and disconnects immediately on shutdown", function (done) {
+            // BLPOP/XREADGROUP BLOCK 0 queue QUIT behind the in-flight blocking
+            // command — QUIT would never be sent, so we force-disconnect instead.
             const flow = [GOOD_CONFIG, {
                 id: "n1", type: "redis-in", server: "cfg-good",
                 command: "blpop", topic: "shutdown:in", obj: false, timeout: 1,
@@ -305,10 +307,10 @@ describe("node connection status", function () {
             helper.load(redisNode, flow, function () {
                 onStatus(helper.getNode("n1"), isGreen, function () {
                     helper.unload().then(function () {
-                        if (quitCalled) {
+                        if (!quitCalled) {
                             done();
                         } else {
-                            done(new Error("quit() was not called on shutdown"));
+                            done(new Error("quit() should NOT be called for blocking redis-in nodes"));
                         }
                     });
                 });

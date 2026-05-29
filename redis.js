@@ -99,7 +99,10 @@ function RedisConfig(n) {
       removeListeners();
       node.status({});
       running = false;
-      await disconnect(node.id);
+      // Blocking commands (BLPOP/XREADGROUP BLOCK 0) queue QUIT behind themselves
+      // and never release the socket — skip QUIT and disconnect immediately so the
+      // in-flight command errors, the while loop sees !running and exits cleanly.
+      await disconnect(node.id, true);
       client = null;
       done();
     });
@@ -522,12 +525,12 @@ function RedisConfig(n) {
     }
   }
 
-  // Tries QUIT (sends the command, lets in-flight replies drain) with a bounded
-  // timeout. Falls back to a forced disconnect when the connection is blocked
-  // (e.g. BLPOP/XREADGROUP BLOCK 0) so Node-RED shutdown is never held up.
+  // Sends QUIT so in-flight replies drain before the socket closes.
+  // Skipped when the connection is not ready (bad host, reconnecting) to avoid
+  // queuing a command that can never be sent.
+  // Falls back to a forced disconnect after GRACEFUL_QUIT_TIMEOUT_MS in case
+  // QUIT itself stalls (e.g. server unresponsive).
   async function gracefulQuit(client) {
-    // Only send QUIT when the connection is ready; otherwise the command is
-    // queued forever waiting for a connection that may never come (e.g. bad host).
     if (client.status !== "ready") {
       try { client.disconnect(); } catch (e) {}
       return;
@@ -548,7 +551,12 @@ function RedisConfig(n) {
     }
   }
 
-  function disconnect(id) {
+  // force=true skips QUIT and disconnects the socket immediately.
+  // Use for blocking connections (BLPOP/XREADGROUP BLOCK 0): QUIT would be
+  // queued behind the in-flight command and never sent, so the timeout would
+  // fire anyway — an immediate disconnect is both faster and correct because
+  // running=false is already set before this is called.
+  function disconnect(id, force) {
     if (usedConn[id] !== undefined) {
       usedConn[id]--;
     }
@@ -556,6 +564,10 @@ function RedisConfig(n) {
       var client = connections[id];
       delete connections[id];
       delete usedConn[id];
+      if (force) {
+        try { client.disconnect(); } catch (e) {}
+        return Promise.resolve();
+      }
       return gracefulQuit(client);
     }
     return Promise.resolve();
