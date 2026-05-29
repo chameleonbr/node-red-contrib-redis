@@ -443,22 +443,49 @@ function RedisConfig(n) {
         throw Error("Payload is not Array");
       }
 
-      var args = null;
+      // Sends the script result downstream and releases the execution slot.
+      var handleResult = function (res) {
+        msg.payload = res;
+        send(msg);
+        done();
+      };
+
+      // Runs the script with EVAL, shipping the full body so Redis (re)caches
+      // it under its SHA1. Used directly for unstored scripts and as the
+      // NOSCRIPT fallback for stored ones.
+      var runWithEval = function () {
+        node.command = "eval";
+        var args = [node.func, node.keyval].concat(msg.payload);
+        client.eval(args, function (err, res) {
+          if (err) {
+            done(err);
+          } else {
+            handleResult(res);
+          }
+        });
+      };
+
       if (node.stored) {
+        // Stored scripts prefer EVALSHA to avoid resending the body on every
+        // call. Redis evicts cached scripts on restart/SCRIPT FLUSH, so a
+        // NOSCRIPT error means the SHA1 is no longer known — fall back to EVAL
+        // which reloads the body and re-caches it under the same SHA1.
         node.command = "evalsha";
-        args = [node.sha1, node.keyval].concat(msg.payload);
+        var args = [node.sha1, node.keyval].concat(msg.payload);
+        client.evalsha(args, function (err, res) {
+          if (err) {
+            if (err.message && err.message.indexOf("NOSCRIPT") !== -1) {
+              runWithEval();
+            } else {
+              done(err);
+            }
+          } else {
+            handleResult(res);
+          }
+        });
       } else {
-        args = [node.func, node.keyval].concat(msg.payload);
+        runWithEval();
       }
-      client[node.command](args, function (err, res) {
-        if (err) {
-          done(err);
-        } else {
-          msg.payload = res;
-          send(msg);
-          done();
-        }
-      });
     });
   }
   RED.nodes.registerType("redis-lua-script", RedisLua);

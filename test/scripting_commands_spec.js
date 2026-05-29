@@ -1,8 +1,26 @@
 const helper = require("node-red-node-test-helper");
+const Redis = require("ioredis");
 const redisNode = require("../redis.js");
 const { cleanupKeys } = require("./helpers/cleanup");
 
 helper.init(require.resolve("node-red"));
+
+// Polls until the redis-lua-script node has loaded its stored script and
+// captured the SHA1, then invokes cb. Avoids racing the async SCRIPT LOAD
+// that fires on the connection "ready" event.
+function waitForSha1(node, cb) {
+  const start = Date.now();
+  const tick = () => {
+    if (node.sha1 && node.sha1.length === 40) {
+      cb();
+    } else if (Date.now() - start > 4000) {
+      cb(new Error("script was never loaded (sha1 not set)"));
+    } else {
+      setTimeout(tick, 25);
+    }
+  };
+  tick();
+}
 
 describe("Scripting commands", function () {
   this.timeout(5000);
@@ -244,6 +262,99 @@ describe("Scripting commands", function () {
       });
 
       scriptloadNode.receive({ payload: ["LOAD", "return 1"] });
+    });
+  });
+
+  // ── redis-lua-script node: stored scripts (EVALSHA) and NOSCRIPT fallback ──
+
+  it("redis-lua-script (stored) executes via EVALSHA and returns result", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "lua-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "LUA",
+        func: "return 'stored-ok'",
+        keyval: 0,
+        stored: true,
+        block: false,
+        wires: [["lua-helper"]],
+      },
+      { id: "lua-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const luaNode = helper.getNode("lua-node");
+      const luaHelper = helper.getNode("lua-helper");
+
+      luaHelper.on("input", (msg) => {
+        try {
+          msg.payload.should.equal("stored-ok");
+          // EVALSHA is the command used when the SHA1 is cached.
+          luaNode.command.should.equal("evalsha");
+          done();
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      waitForSha1(luaNode, (err) => {
+        if (err) return done(err);
+        luaNode.receive({ payload: [] });
+      });
+    });
+  });
+
+  it("redis-lua-script (stored) falls back to EVAL on NOSCRIPT", function (done) {
+    const flow = [
+      configNode,
+      {
+        id: "lua-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "LUA",
+        func: "return 'fallback-ok'",
+        keyval: 0,
+        stored: true,
+        block: false,
+        wires: [["lua-helper"]],
+      },
+      { id: "lua-helper", type: "helper" },
+    ];
+
+    helper.load(redisNode, flow, () => {
+      const luaNode = helper.getNode("lua-node");
+      const luaHelper = helper.getNode("lua-helper");
+
+      luaHelper.on("input", (msg) => {
+        try {
+          // Even though EVALSHA failed with NOSCRIPT, the script still ran
+          // because the node re-sent the body via EVAL.
+          msg.payload.should.equal("fallback-ok");
+          luaNode.command.should.equal("eval");
+          done();
+        } catch (err) {
+          done(err);
+        }
+      });
+
+      waitForSha1(luaNode, (err) => {
+        if (err) return done(err);
+        // Evict every cached script from Redis so the node's SHA1 is no longer
+        // known — the next EVALSHA must return a NOSCRIPT error.
+        const flushClient = new Redis({ host: "127.0.0.1", port: 6379 });
+        flushClient
+          .script("flush")
+          .then(() => {
+            flushClient.disconnect();
+            luaNode.receive({ payload: [] });
+          })
+          .catch((e) => {
+            flushClient.disconnect();
+            done(e);
+          });
+      });
     });
   });
 });
