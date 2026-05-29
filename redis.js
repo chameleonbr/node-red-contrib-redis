@@ -4,6 +4,8 @@ module.exports = function (RED) {
   let connections = {};
   let usedConn = {};
 
+  const GRACEFUL_QUIT_TIMEOUT_MS = 2000;
+
   // Attaches ioredis connection-event listeners to drive node.status.
   // Returns a cleanup function that removes all attached listeners.
   // onReady is optional; defaults to showing green "connected".
@@ -96,9 +98,9 @@ function RedisConfig(n) {
     node.on("close", async (undeploy, done) => {
       removeListeners();
       node.status({});
-      disconnect(node.id);
-      client = null;
       running = false;
+      await disconnect(node.id);
+      client = null;
       done();
     });
 
@@ -236,10 +238,10 @@ function RedisConfig(n) {
     let client = getConn(this.server, node.server.name);
     let removeListeners = attachStatusListeners(node, client);
 
-    node.on("close", function (done) {
+    node.on("close", async function (done) {
       removeListeners();
       node.status({});
-      disconnect( node.server.name);
+      await disconnect(node.server.name);
       client = null;
       done();
     });
@@ -307,10 +309,10 @@ function RedisConfig(n) {
     let client = getConn(this.server, id);
     let removeListeners = attachStatusListeners(node, client);
 
-    node.on("close", function (done) {
+    node.on("close", async function (done) {
       removeListeners();
       node.status({});
-      disconnect(id);
+      await disconnect(id);
       client = null;
       done();
     });
@@ -423,10 +425,10 @@ function RedisConfig(n) {
       removeListeners = attachStatusListeners(node, client);
     }
 
-    node.on("close", function (done) {
+    node.on("close", async function (done) {
       removeListeners();
       node.status({});
-      disconnect(id);
+      await disconnect(id);
       client = null;
       done();
     });
@@ -475,11 +477,11 @@ function RedisConfig(n) {
     }
     let removeListeners = attachStatusListeners(node, client);
 
-    node.on("close", function (done) {
+    node.on("close", async function (done) {
       removeListeners();
       node.status({});
       try { this.context()[node.location].set(node.topic, null); } catch (e) {}
-      disconnect(id);
+      await disconnect(id);
       client = null;
       done();
     });
@@ -520,13 +522,42 @@ function RedisConfig(n) {
     }
   }
 
+  // Tries QUIT (sends the command, lets in-flight replies drain) with a bounded
+  // timeout. Falls back to a forced disconnect when the connection is blocked
+  // (e.g. BLPOP/XREADGROUP BLOCK 0) so Node-RED shutdown is never held up.
+  async function gracefulQuit(client) {
+    // Only send QUIT when the connection is ready; otherwise the command is
+    // queued forever waiting for a connection that may never come (e.g. bad host).
+    if (client.status !== "ready") {
+      try { client.disconnect(); } catch (e) {}
+      return;
+    }
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try { client.disconnect(); } catch (e) {}
+    }, GRACEFUL_QUIT_TIMEOUT_MS);
+    try {
+      await client.quit();
+    } catch (e) {
+      if (!timedOut) {
+        try { client.disconnect(); } catch (_) {}
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   function disconnect(id) {
     if (usedConn[id] !== undefined) {
       usedConn[id]--;
     }
     if (connections[id] && usedConn[id] <= 0) {
-      connections[id].disconnect();
+      var client = connections[id];
       delete connections[id];
+      delete usedConn[id];
+      return gracefulQuit(client);
     }
+    return Promise.resolve();
   }
 };

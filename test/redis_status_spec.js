@@ -1,6 +1,7 @@
 "use strict";
 const helper = require("node-red-node-test-helper");
 const redisNode = require("../redis.js");
+const Redis = require("ioredis");
 
 helper.init(require.resolve("node-red"));
 
@@ -230,6 +231,102 @@ describe("node connection status", function () {
                             done();
                         } else {
                             done(new Error("status({}) was not called on close"));
+                        }
+                    });
+                });
+            });
+        });
+    });
+
+    // ── graceful shutdown ───────────────────────────────────────────────────
+
+    describe("graceful shutdown", function () {
+        // Spy on Redis.prototype.quit by wrapping it. Since ioredis is cached by
+        // Node.js module system, the same prototype is used by redis.js — so this
+        // spy is visible inside the node without any module re-loading tricks.
+        let originalQuit;
+        let quitCalled;
+
+        beforeEach(function () {
+            quitCalled = false;
+            originalQuit = Redis.prototype.quit;
+            Redis.prototype.quit = async function () {
+                quitCalled = true;
+                return originalQuit.call(this);
+            };
+        });
+
+        afterEach(function () {
+            Redis.prototype.quit = originalQuit;
+        });
+
+        it("redis-out calls quit() on shutdown", function (done) {
+            const flow = [GOOD_CONFIG, {
+                id: "n1", type: "redis-out", server: "cfg-good",
+                command: "rpush", topic: "shutdown:out", obj: false, wires: [],
+            }];
+            helper.load(redisNode, flow, function () {
+                onStatus(helper.getNode("n1"), isGreen, function () {
+                    helper.unload().then(function () {
+                        if (quitCalled) {
+                            done();
+                        } else {
+                            done(new Error("quit() was not called on shutdown"));
+                        }
+                    });
+                });
+            });
+        });
+
+        it("redis-command calls quit() on shutdown", function (done) {
+            const flow = [GOOD_CONFIG, {
+                id: "n1", type: "redis-command", server: "cfg-good",
+                command: "GET", topic: "", params: "[]", block: false, wires: [],
+            }];
+            helper.load(redisNode, flow, function () {
+                onStatus(helper.getNode("n1"), isGreen, function () {
+                    helper.unload().then(function () {
+                        if (quitCalled) {
+                            done();
+                        } else {
+                            done(new Error("quit() was not called on shutdown"));
+                        }
+                    });
+                });
+            });
+        });
+
+        it("redis-in (blpop) calls quit() on shutdown", function (done) {
+            const flow = [GOOD_CONFIG, {
+                id: "n1", type: "redis-in", server: "cfg-good",
+                command: "blpop", topic: "shutdown:in", obj: false, timeout: 1,
+                groupname: "", consumername: "", wires: [],
+            }];
+            helper.load(redisNode, flow, function () {
+                onStatus(helper.getNode("n1"), isGreen, function () {
+                    helper.unload().then(function () {
+                        if (quitCalled) {
+                            done();
+                        } else {
+                            done(new Error("quit() was not called on shutdown"));
+                        }
+                    });
+                });
+            });
+        });
+
+        it("redis-lua-script calls quit() on shutdown", function (done) {
+            const flow = [GOOD_CONFIG, {
+                id: "n1", type: "redis-lua-script", server: "cfg-good",
+                func: "return 1", keyval: 0, stored: false, block: false, wires: [],
+            }];
+            helper.load(redisNode, flow, function () {
+                onStatus(helper.getNode("n1"), isGreen, function () {
+                    helper.unload().then(function () {
+                        if (quitCalled) {
+                            done();
+                        } else {
+                            done(new Error("quit() was not called on shutdown"));
                         }
                     });
                 });
