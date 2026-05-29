@@ -1102,11 +1102,25 @@ Use this node for operations not covered by the dedicated <em>redis-in</em> and
                 value: $("#node-input-func").val()
             });
             RED.library.create({
-                url: "functions", // where to get the data from
-                type: "function.lua", // the type of object the library is for
-                editor: this.editor, // the field name the main text body goes to
+                url: "functions",
+                type: "lua",
+                editor: this.editor,
                 mode: "ace/mode/lua",
-                fields: ['name', 'keyval', 'stored']
+                ext: "lua",
+                fields: [
+                    'name',
+                    'keyval',
+                    {
+                        name: 'stored',
+                        get: function() { return $("#node-input-stored").is(":checked") ? "true" : "false"; },
+                        set: function(val) { $("#node-input-stored").prop("checked", val === "true"); }
+                    },
+                    {
+                        name: 'block',
+                        get: function() { return $("#node-input-block").is(":checked") ? "true" : "false"; },
+                        set: function(val) { $("#node-input-block").prop("checked", val === "true"); }
+                    }
+                ]
             });
             this.editor.focus();
         },
@@ -1148,27 +1162,27 @@ Use this node for operations not covered by the dedicated <em>redis-in</em> and
         <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
-    
     <div class="form-row">
-        <label>&nbsp;</label>
-        <input type="checkbox" id="node-input-stored" style="display: inline-block; width: auto; vertical-align: top;">
-        <label for="node-input-stored" style="width: 70%;">Stored Script</label>
-    </div>
-    <div class="form-row">
-        <label for="node-input-keyval"><i class="fa fa-random"></i> Keys</label>
+        <label for="node-input-keyval"><i class="fa fa-list-ol"></i> Keys</label>
         <input id="node-input-keyval" style="width: 60px; height: 1.7em;" value="0">
     </div>
+    <div class="form-row">
+        <label>&nbsp;</label>
+        <input type="checkbox" id="node-input-stored" style="display:inline-block; width:15px; vertical-align:baseline;">
+        <label for="node-input-stored" style="width:auto; margin-left:4px;">Stored Script (EVALSHA)</label>
+    </div>
+    <div class="form-row">
+        <label>&nbsp;</label>
+        <input type="checkbox" id="node-input-block" style="display:inline-block; width:15px; vertical-align:baseline;">
+        <label for="node-input-block" style="width:auto; margin-left:4px;">Block Commands (dedicated connection)</label>
+    </div>
     <div class="form-row" style="margin-bottom: 0px;">
-        <label for="node-input-func"><i class="fa fa-wrench"></i> Lua Script</label>
+        <label for="node-input-func"><i class="fa fa-code"></i> Lua Script</label>
         <input type="hidden" id="node-input-func" autofocus="autofocus">
         <input type="hidden" id="node-input-noerr">
     </div>
     <div class="form-row node-text-editor-row">
         <div style="height: 250px;" class="node-text-editor" id="node-input-func-editor"></div>
-    </div>
-    <div class="form-row">
-        <label for="node-input-block">&nbsp;</label>
-        <input type="checkbox" id="node-input-block" style="display:inline-block; width:15px; vertical-align:baseline;"> Block Commands (Force use new connection)
     </div>
 </script>
 
