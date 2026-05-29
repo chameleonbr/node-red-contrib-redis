@@ -1122,7 +1122,8 @@ Use this node for operations not covered by the dedicated <em>redis-in</em> and
                 }
             }
             $("#node-input-func").val(this.editor.getValue());
-            delete this.editor;
+            this.editor.destroy();
+            this.editor = null;
         },
         oneditresize: function (size) {
             var rows = $("#dialog-form>div:not(.node-text-editor-row)");
