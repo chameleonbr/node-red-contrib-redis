@@ -4,6 +4,53 @@ module.exports = function (RED) {
   let connections = {};
   let usedConn = {};
 
+  // Attaches ioredis connection-event listeners to drive node.status.
+  // Returns a cleanup function that removes all attached listeners.
+  // onReady is optional; defaults to showing green "connected".
+  function attachStatusListeners(node, client, onReady) {
+    var _onReady = onReady || function () {
+      node.status({ fill: "green", shape: "dot", text: "connected" });
+    };
+    var onError = function (e) {
+      node.status({ fill: "red", shape: "ring", text: e.message });
+    };
+    var onClose = function () {
+      node.status({ fill: "yellow", shape: "ring", text: "disconnected" });
+    };
+    var onReconnecting = function () {
+      node.status({ fill: "yellow", shape: "ring", text: "reconnecting" });
+    };
+    var onEnd = function () {
+      node.status({ fill: "red", shape: "ring", text: "disconnected" });
+    };
+
+    client.on("ready", _onReady);
+    client.on("error", onError);
+    client.on("close", onClose);
+    client.on("reconnecting", onReconnecting);
+    client.on("end", onEnd);
+
+    // Set status immediately based on the client's current state (handles shared connections).
+    var s = client.status;
+    if (s === "ready") {
+      _onReady();
+    } else if (s === "end") {
+      onEnd();
+    } else if (s === "reconnecting") {
+      onReconnecting();
+    } else {
+      node.status({ fill: "yellow", shape: "ring", text: "connecting" });
+    }
+
+    return function () {
+      client.removeListener("ready", _onReady);
+      client.removeListener("error", onError);
+      client.removeListener("close", onClose);
+      client.removeListener("reconnecting", onReconnecting);
+      client.removeListener("end", onEnd);
+    };
+  }
+
 function RedisConfig(n) {
     RED.nodes.createNode(this, n);
     this.name = n.name;
@@ -44,7 +91,10 @@ function RedisConfig(n) {
     let client = getConn(this.server, n.id);
     let running = true;
 
+    let removeListeners = attachStatusListeners(node, client);
+
     node.on("close", async (undeploy, done) => {
+      removeListeners();
       node.status({});
       disconnect(node.id);
       client = null;
@@ -71,13 +121,7 @@ function RedisConfig(n) {
           });
         }
       });
-      client[node.command](node.topic, (err, count) => {
-        node.status({
-          fill: "green",
-          shape: "dot",
-          text: "connected",
-        });
-      });
+      client[node.command](node.topic, (err, count) => {});
     } else if (node.command === "subscribe") {
       client.on("message", function (channel, message) {
         var payload = null;
@@ -96,13 +140,7 @@ function RedisConfig(n) {
           });
         }
       });
-      client[node.command](node.topic, (err, count) => {
-        node.status({
-          fill: "green",
-          shape: "dot",
-          text: "connected",
-        });
-      });
+      client[node.command](node.topic, (err, count) => {});
     } else if (node.command === 'xreadgroup') {
         const [stream, lastid] = node.topic.split(':');
         (async () => {
@@ -182,11 +220,6 @@ function RedisConfig(n) {
         }
       })();
     }
-    node.status({
-      fill: "green",
-      shape: "dot",
-      text: "connected",
-    });
   }
 
   RED.nodes.registerType("redis-in", RedisIn);
@@ -199,10 +232,12 @@ function RedisConfig(n) {
     this.topic = n.topic;
     this.obj = n.obj;
     var node = this;
- 
+
     let client = getConn(this.server, node.server.name);
+    let removeListeners = attachStatusListeners(node, client);
 
     node.on("close", function (done) {
+      removeListeners();
       node.status({});
       disconnect( node.server.name);
       client = null;
@@ -270,8 +305,10 @@ function RedisConfig(n) {
     let id = this.block ? n.id : this.server.name;
 
     let client = getConn(this.server, id);
+    let removeListeners = attachStatusListeners(node, client);
 
     node.on("close", function (done) {
+      removeListeners();
       node.status({});
       disconnect(id);
       client = null;
@@ -367,30 +404,32 @@ function RedisConfig(n) {
 
     let client = getConn(this.server, id);
 
+    let removeListeners;
+    if (node.stored) {
+      // On every "ready" (including reconnects) reload the script, since Redis
+      // is volatile and loses loaded scripts on restart.
+      var loadScript = function () {
+        client.script("load", node.func, function (err, res) {
+          if (err) {
+            node.status({ fill: "red", shape: "dot", text: "script not loaded" });
+          } else {
+            node.status({ fill: "green", shape: "dot", text: "script loaded" });
+            node.sha1 = res;
+          }
+        });
+      };
+      removeListeners = attachStatusListeners(node, client, loadScript);
+    } else {
+      removeListeners = attachStatusListeners(node, client);
+    }
+
     node.on("close", function (done) {
+      removeListeners();
       node.status({});
       disconnect(id);
       client = null;
       done();
     });
-    if (node.stored) {
-      client.script("load", node.func, function (err, res) {
-        if (err) {
-          node.status({
-            fill: "red",
-            shape: "dot",
-            text: "script not loaded",
-          });
-        } else {
-          node.status({
-            fill: "green",
-            shape: "dot",
-            text: "script loaded",
-          });
-          node.sha1 = res;
-        }
-      });
-    }
 
     node.on("input", function (msg, send, done) {
       send = send || function() { node.send.apply(node,arguments) }
@@ -429,16 +468,17 @@ function RedisConfig(n) {
     var node = this;
     let client = getConn(this.server, id);
 
-    this.context()[node.location].set(node.topic, client);
-    node.status({
-      fill: "green",
-      shape: "dot",
-      text: "ready",
-    });
+    try {
+      this.context()[node.location].set(node.topic, client);
+    } catch (e) {
+      node.warn("redis-instance: failed to store client in context: " + e.message);
+    }
+    let removeListeners = attachStatusListeners(node, client);
 
     node.on("close", function (done) {
+      removeListeners();
       node.status({});
-      this.context()[node.location].set(node.topic, null);
+      try { this.context()[node.location].set(node.topic, null); } catch (e) {}
       disconnect(id);
       client = null;
       done();
