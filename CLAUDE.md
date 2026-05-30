@@ -61,6 +61,7 @@ Do not rewrite connection ownership casually. Small connection-id changes can br
 
 ## Editing policy
 
+Create test case to reproduce bug before apply patch and re-run test to confirm bug fixed.
 Prefer the smallest safe change that solves the requested issue.
 Do not refactor for style alone.
 Do not rename public node types, config fields, message fields, or editor ids unless required and covered by tests.

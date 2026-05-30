@@ -20,7 +20,7 @@ Produce the smallest safe change that preserves:
 ## Required read order
 
 Read these before making changes:
-1. `CLAUDE.md`
+1. Claude: `CLAUDE.md`, Codex: `AGENTS.md`
 2. `docs/REFERENCE_MAP.md`
 3. `docs/ARCHITECTURE.md`
 4. `docs/NODE_GUIDE.md`

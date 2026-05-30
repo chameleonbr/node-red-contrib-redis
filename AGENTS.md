@@ -26,6 +26,10 @@ Before editing:
 4. Check `docs/CHANGE_WORKFLOW.md` for safe-edit rules.
 5. Check `docs/TESTING.md` for verification steps.
 
+## Bug Fixing
+
+Create test case to reproduce bug before apply patch and re-run test to confirm bug fixed.
+
 ## Commands
 
 Install dependencies:
