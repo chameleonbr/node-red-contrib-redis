@@ -146,11 +146,14 @@ refcount reaches 0.
 |---|---|---|---|
 | `redis-in` | `n.id` | dedicated per node | forced disconnect (blocking) |
 | `redis-out` | `server.name` | shared by config name | graceful quit |
-| `redis-command` | `block ? n.id : server.name` | conditional | graceful quit |
-| `redis-lua-script` | `block ? n.id : n.server.name` | conditional | graceful quit |
+| `redis-command` | `block ? n.id : this.server.name` | conditional | graceful quit |
+| `redis-lua-script` | `block ? n.id : this.server.name` | conditional | graceful quit |
 | `redis-instance` | `n.id` | dedicated per node | graceful quit |
 
-`RedisLua` connection-id selection (previously flagged as ambiguous) is resolved: it uses
-the same `block ? n.id : <config name>` rule as `redis-command`. Still confirm intent with a
-human before changing any id key — it underpins subscriber mode, blocking behavior, status,
-and shutdown.
+All four config-name keys use `this.server.name` — the **resolved** config node
+(`this.server = RED.nodes.getNode(n.server)`), not `n.server` (which is just the config-node
+id string, so `n.server.name` is `undefined`). `redis-lua-script` used `n.server.name` until
+a fix made it consistent with the others; the bug had all non-blocking Lua nodes collapse
+onto a single pool key `undefined` and share one client across different configs
+(regression test: `test/redis_lua_conn_spec.js`). Always confirm intent with a human before
+changing any id key — it underpins subscriber mode, blocking behavior, status, and shutdown.
