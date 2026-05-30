@@ -24,3 +24,9 @@ Before editing:
 Install dependencies:
 ```bash
 npm install
+```
+
+Run the test suite (requires a live Redis on `127.0.0.1:6379`):
+```bash
+npm test
+```

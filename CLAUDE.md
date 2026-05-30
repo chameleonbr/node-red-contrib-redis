@@ -124,6 +124,12 @@ A real Redis server on `127.0.0.1:6379` is required for the current test suite.
 Run:
 - `npm test`
 
+Redis is expected to already be installed locally; if it is not installed at all, ask the
+human to install it rather than installing the server yourself. On this development machine
+you may otherwise change Redis when a test needs it (config, ACL, version), but capture the
+original state first and restore it exactly afterward so results stay reproducible. See
+`docs/TESTING.md` for the full environment boundary.
+
 Before committing, also account for:
 - Husky pre-commit calling `npm test`
 - lint-staged formatting staged files with Prettier

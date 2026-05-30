@@ -125,7 +125,9 @@ Purpose:
 - place a live Redis client into Node-RED context
 
 Behavior:
-- stores the client under `node`, `flow`, or `global` context based on configuration
+- stores the client under `flow` or `global` context based on configuration
+  (the editor offers only these two; the runtime does `this.context()[node.location]`,
+  and there is no `node` accessor on `this.context()`)
 - clears the stored reference on close
 - shares most lifecycle expectations with other nodes
 

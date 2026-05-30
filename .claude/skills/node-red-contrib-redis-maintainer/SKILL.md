@@ -36,12 +36,17 @@ Core files:
 - `redis.js`
 - `redis.html`
 
-Tests:
-- `test/redis_in_spec.js`
-- `test/redis_out_spec.js`
-- `test/redis_status_spec.js`
-- `test/stream_commands_spec.js`
-- `test/redis_lua_ui_spec.js`
+Tests (18 spec files, ~237 cases — `ls test/*_spec.js` for the live list):
+- node behavior/lifecycle: `test/redis_in_spec.js`, `test/redis_out_spec.js`,
+  `test/redis_command_spec.js`, `test/redis_status_spec.js`,
+  `test/redis_lua_ui_spec.js` (static HTML parse, no Redis needed)
+- command families, all driving `redis-command`: `test/bit_commands_spec.js`,
+  `test/geo_commands_spec.js`, `test/hash_commands_spec.js`,
+  `test/hyperloglog_commands_spec.js`, `test/key_commands_spec.js`,
+  `test/list_commands_spec.js`, `test/scripting_commands_spec.js`,
+  `test/server_commands_spec.js`, `test/set_commands_spec.js`,
+  `test/sorted_set_commands_spec.js`, `test/stream_commands_spec.js`,
+  `test/string_commands_spec.js`
 
 Supporting files:
 - `test/helpers/cleanup.js`
@@ -150,3 +155,18 @@ Assume a real Redis server must be running on `127.0.0.1:6379`.
 Primary command:
 ```bash
 npm test
+```
+
+Run a single spec while iterating:
+```bash
+npx mocha test/redis_in_spec.js
+```
+
+## Environment boundary
+
+Redis is expected to be installed and available locally. If it is not installed at all,
+ask the human to install it rather than installing the server package yourself. Otherwise,
+on this development machine you may change Redis when a test needs it (config, `CONFIG SET`,
+ACL, even version) — but capture the original state first and **restore it exactly
+afterward** so results stay reproducible. Never leave Redis stopped, reconfigured, flushed,
+or on a different version when done. Full rules: `docs/TESTING.md`.

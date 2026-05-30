@@ -30,10 +30,18 @@ Runtime and editor pairs:
 ## Connection model
 
 Module-level state in `redis.js`:
-- `connections`
-- `usedConn`
+- `connections` — id → live ioredis client
+- `usedConn` — id → reference count
 
 Use this as the source of truth for connection sharing.
+
+Reference counting is the rule that ties it together: `getConn(config, id)` reuses an
+existing client and increments `usedConn[id]`; `disconnect(id)` decrements it and only tears
+the socket down when the count reaches 0. So a shared connection survives until the **last**
+referencing node closes. Getting an id key wrong silently changes who shares with whom.
+
+A per-node-type cheat-sheet of which id each node uses lives in `REFERENCE_MAP.md`
+(Connection-id quick reference). Keep the two in sync.
 
 ### Shared vs dedicated connections
 
@@ -126,7 +134,10 @@ This node has editor-library integration and dedicated UI regression tests.
 
 ### `redis-instance`
 
-Stores the Redis client in node, flow, or global context so Function nodes can reuse it.
+Stores the Redis client in flow or global context so Function nodes can reuse it.
+The runtime indexes `this.context()[node.location]`, so `location` must be `flow` or
+`global` — the editor only offers those two. There is no `this.context().node` accessor,
+so a `node` value would throw (the store is wrapped in try/catch and would be silently lost).
 
 ## Editor/runtime coupling
 
