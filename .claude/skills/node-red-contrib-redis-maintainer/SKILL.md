@@ -36,7 +36,7 @@ Core files:
 - `redis.js`
 - `redis.html`
 
-Tests (18 spec files, ~237 cases — `ls test/*_spec.js` for the live list):
+Tests (17 spec files, ~237 cases — `ls test/*_spec.js` for the live list):
 - node behavior/lifecycle: `test/redis_in_spec.js`, `test/redis_out_spec.js`,
   `test/redis_command_spec.js`, `test/redis_status_spec.js`,
   `test/redis_lua_ui_spec.js` (static HTML parse, no Redis needed)
@@ -122,6 +122,7 @@ If the feature changes user configuration:
 - update help text
 - add or update tests
 - consider an example flow
+- update the relevant docs and agent guidance in the same change
 
 ### Modify Lua/library behavior
 

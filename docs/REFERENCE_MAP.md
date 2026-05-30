@@ -5,12 +5,18 @@ This document is the fastest entry point for humans and coding agents working on
 
 ## Read order by task
 
-For any task:
-1. `../CLAUDE.md`
-2. `ARCHITECTURE.md`
-3. `NODE_GUIDE.md`
-4. `CHANGE_WORKFLOW.md`
-5. `TESTING.md`
+For any task, start with the entry point for your agent:
+- Codex: `../AGENTS.md` and 
+  `../.codex/skills/node-red-contrib-redis-maintainer/SKILL.md`
+- Claude: `../CLAUDE.md` and
+  `../.claude/skills/node-red-contrib-redis-maintainer/SKILL.md`
+
+Then read:
+1. `ARCHITECTURE.md`
+2. `NODE_GUIDE.md`
+3. `CHANGE_WORKFLOW.md`
+4. `TESTING.md`
+5. `TROUBLESHOOTING.md`
 
 ## Repository layout
 
@@ -19,7 +25,7 @@ Top-level implementation:
 - `../redis.js`
 - `../redis.html`
 
-Tests (18 spec files, ~237 `it()` cases). Run them all with `npm test`; do not rely on this list staying exhaustive — confirm with `ls test/*_spec.js`.
+Tests (17 spec files, ~237 `it()` cases). Run them all with `npm test`; do not rely on this list staying exhaustive — confirm with `ls test/*_spec.js`.
 
 Node behavior and lifecycle:
 - `../test/redis_in_spec.js` — `redis-in` blocking pops, pub/sub, streams
@@ -59,6 +65,8 @@ User-facing docs:
 
 Agent docs:
 - `../AGENTS.md`
+- `../.codex/skills/node-red-contrib-redis-maintainer/SKILL.md` - symlink to the shared maintainer skill text
+- `../CLAUDE.md`
 - `../.claude/skills/node-red-contrib-redis-maintainer/SKILL.md`
 
 ## Where to look by feature
@@ -112,6 +120,7 @@ Read:
 - `NODE_GUIDE.md` — node-by-node behavior and extension guidance
 - `CHANGE_WORKFLOW.md` — minimal-change rules and edit checklist
 - `TESTING.md` — Redis prerequisite, test layout, and regression strategy
+- `TROUBLESHOOTING.md` — common local Redis, test, stream, Lua, and sandbox failures
 
 ## Quick warnings
 

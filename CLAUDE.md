@@ -143,7 +143,9 @@ When user-visible behavior changes:
 - update or add an example flow if it improves discoverability
 - update the matching document under `docs/`
 
-Keep agent-facing docs concise and factual.
+When features are added, behavior changes, tests move, examples drift, or maintenance rules
+change, update the relevant docs and agent guidance in the same change. Keep agent-facing
+docs concise and factual.
 The detailed procedures belong in `docs/`, while this file should stay high-signal.
 
 ## Known caution areas

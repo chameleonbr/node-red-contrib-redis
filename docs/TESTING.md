@@ -55,7 +55,7 @@ npx mocha test/redis_in_spec.js
 
 ## Test layout
 
-There are 18 spec files (~237 `it()` cases). Do not assume this list is exhaustive forever —
+There are 17 spec files (~237 `it()` cases). Do not assume this list is exhaustive forever —
 confirm with `ls test/*_spec.js`.
 
 Node behavior and lifecycle:

@@ -8,7 +8,14 @@ The main implementation lives in:
 - `redis.html`
 
 Treat runtime and editor behavior as a paired system.
-A change is incomplete if runtime, editor validation, help text, tests, and examples drift apart.
+A change is incomplete if runtime, editor validation, help text, tests, examples, and docs drift apart. When features are added or behavior changes, update the relevant docs and agent guidance in the same change.
+
+## Agent-specific guidance
+
+Codex starts from this `AGENTS.md`.
+Claude starts from `CLAUDE.md` and `.claude/skills/node-red-contrib-redis-maintainer/SKILL.md`.
+
+This repository also exposes `.codex/skills/node-red-contrib-redis-maintainer/SKILL.md` as a symlink to the shared maintainer skill text for environments that load repo-local Codex skills.
 
 ## Essential startup checklist
 
@@ -30,3 +37,4 @@ Run the test suite (requires a live Redis on `127.0.0.1:6379`):
 ```bash
 npm test
 ```
+

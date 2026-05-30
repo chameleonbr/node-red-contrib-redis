@@ -60,7 +60,10 @@ pre-commit, so a failing suite (or missing Redis) will block your commit.
 
 ## Definition of Done
 
-A change is complete only when runtime, editor, help text, tests, **and docs** agree.
+A change is complete only when runtime, editor, help text, tests, examples, **and docs** agree.
+Docs are living maintenance artifacts: when features are added, behavior changes, tests move,
+or examples drift, update the relevant project docs in the same change.
+
 Before you consider the task finished, confirm you updated everything the change touched:
 
 - changed a node's runtime behavior → update its section in `NODE_GUIDE.md`

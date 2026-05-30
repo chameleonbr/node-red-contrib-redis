@@ -987,10 +987,14 @@ Use this node for operations not covered by the dedicated <em>redis-in</em> and
     <dt>topic <span class="property-type">string (optional)</span></dt>
     <dd>The primary Redis key. Overrides the node&rsquo;s <strong>Topic/Key</strong> setting.
         Passed as the first argument after the command name.</dd>
-    <dt>payload <span class="property-type">string | number | array | object (optional)</span></dt>
+    <dt>payload <span class="property-type">string | array | object (optional)</span></dt>
     <dd>Additional arguments for the command.
-        A JSON array is spread as individual arguments.
-        Overrides the node&rsquo;s static <strong>Params</strong> when provided.</dd>
+        A non-empty string, non-empty JSON array, or non-empty object overrides
+        the node&rsquo;s static <strong>Params</strong>. A JSON array is spread as
+        individual arguments. Numeric, boolean, empty string, empty array, empty
+        object, <code>null</code>, and missing payload values are treated as no
+        payload and the node falls back to <strong>Params</strong> or
+        <strong>Topic / Key</strong>.</dd>
 </dl>
 
 <h3>Outputs</h3>
@@ -1032,7 +1036,10 @@ Use this node for operations not covered by the dedicated <em>redis-in</em> and
     <li>Neither present &rarr;
         <code>COMMAND</code></li>
 </ul>
-<p>When payload is a JSON array each element is passed as a separate argument.</p>
+<p>When payload is a JSON array each element is passed as a separate argument.
+Falsy or empty payload values are ignored by this node&rsquo;s current runtime logic,
+so commands that need values such as <code>0</code>, <code>false</code>, or an empty
+string should pass them inside a non-empty array.</p>
 
 <h3>Examples</h3>
 <ul>
@@ -1338,7 +1345,7 @@ directly without going through a dedicated redis node.</p>
 </dl>
 
 <h3>Usage in a Function node</h3>
-<pre><code>// Retrieve the shared client stored by redis-instance
+<pre><code>// Retrieve the client stored by redis-instance
 const redis = flow.get("redis");
 if (!redis) { node.error("Redis client not ready"); return; }
 
@@ -1352,10 +1359,9 @@ return msg;</code></pre>
 <ul>
     <li>The client is placed in context when the node deploys and removed when
         the flow stops. Always guard against <code>null</code> before use.</li>
-    <li>The connection is shared with other nodes that reference the same
-        <em>redis-config</em>. Avoid using blocking commands
-        (<code>BLPOP</code>, <code>BRPOP</code>, etc.) on the shared client
-        as they will block all other operations on that connection.</li>
+    <li>Each <em>redis-instance</em> node stores its own ioredis client in context.
+        Avoid using blocking commands (<code>BLPOP</code>, <code>BRPOP</code>, etc.)
+        on that stored client unless it is dedicated to that blocking workflow.</li>
     <li>All ioredis methods and options are available. See the
         <a href="https://github.com/redis/ioredis#basic-usage" target="_blank">&#8599; ioredis documentation</a>
         for the full API.</li>
