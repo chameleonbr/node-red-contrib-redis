@@ -1,102 +1,167 @@
-# node-red-contrib-redis
+# CLAUDE.md
 
-This is Node-RED custom developed node that provides Node-RED accessing to Redis/Valkey with pub/sub, list, lua scripting and all other commands support.
+This project is a Node-RED custom node package implemented in JavaScript ES6+ with Node.js v24 as the working runtime target, Node-RED v4.1.10 as the editor/runtime target, and ioredis v5.11.0 as the Redis client.
+The package registers one Node-RED module entrypoint in `package.json` and is implemented primarily in `redis.js` and `redis.html`.
 
-## Tech Stack
+## Project purpose
 
-- **Runtime:** Node.js >= v22, Node-RED >= v4.1.10
-- **Library:** ioredis >= 5.11.0
-- **In-memory database** Redis >= 8.0, Valkey
+The package provides Redis integration nodes for:
+- shared configuration
+- blocking and event-style input
+- output/write commands
+- generic commands
+- Lua scripts
+- context injection of a Redis client instance
 
-## Architecture
+Treat this codebase as a Node-RED node package first, not as a generic Redis SDK.
 
-### Node Registration Pattern
+## Read this first
 
-All nodes follow a standard Node-RED registration pattern:
+When starting work, read in this order:
+1. `docs/REFERENCE_MAP.md`
+2. `docs/ARCHITECTURE.md`
+3. `docs/NODE_GUIDE.md`
+4. `docs/CHANGE_WORKFLOW.md`
+5. `docs/TESTING.md`
 
-1. **Module export function** receives `RED` runtime object
-2. **Node constructor function** receives config from editor and calls `RED.nodes.createNode(this, config)`
-3. **Registration** via `RED.nodes.registerType(type, constructor, options)`
-4. **HTML counterpart** (same filename but `.html`) defines editor UI, help text, and default values
+For Lua/library-related changes, also read:
+- `test/redis_lua_ui_spec.js`
+- the `redis-lua-script` section in `docs/NODE_GUIDE.md`
 
-### Shared Configuration: redis-config
+## Source map
 
-All Redis nodes depend on a `redis-config` node that stores remote Redis/Valkey service information:
+Primary files:
+- `package.json` — npm metadata, scripts, dependency versions, Node-RED registration
+- `redis.js` — all runtime node implementations and connection lifecycle logic
+- `redis.html` — all editor UI, help text, command lists, and validation
+- `test/**/*_spec.js` — behavior and regression tests
+- `test/helpers/cleanup.js` — Redis key cleanup for tests
+- `examples/*.json` — sample flows
 
-- Single instance deployment: domain name or IP address and port number
-  or
-- AWS memorydb cluster deployment: endpoint like clustercfg.xxx.bchgcd.memorydb.ap-southeast-2.amazonaws.com:6379
-  The 2 deployment types above should have common options:
-- TLS/SSL
-- Username
-- Password
+## Runtime architecture rules
 
-## Common Commands
+The runtime is implemented as one CommonJS Node-RED module exported from `redis.js`.
+Keep that deployment model unless a human explicitly approves a structural split.
 
-```bash`
-npm install # Install dependencies
-npm test # Run tests
-npx lint-staged # Pre-commit linting and formatting
-cd ~/.node-red && npm install /path/to/this/repo # Test node locally
-codegraph init -i # Run this command before scanning files
+Current runtime node types:
+- `redis-config`
+- `redis-in`
+- `redis-out`
+- `redis-command`
+- `redis-lua-script`
+- `redis-instance`
 
-```
+Connection management is shared and stateful:
+- `connections` and `usedConn` are module-level registries
+- some nodes intentionally share connections
+- blocking or subscriber-style flows intentionally use dedicated connections
+- shutdown behavior is different for blocking vs non-blocking nodes
 
-## JavaScript Code Quality
-- Use JavaScript, not CommonJS
-- Use modern, standard JavaScript ES6+ features
-- Async Patterns: Use `async/await` exclusively. Do not chain `.then()` or `.catch()`.
-- Add easy to understand comments on complex or critical code
+Do not rewrite connection ownership casually. Small connection-id changes can break pub/sub, blocking commands, close handlers, and status tests.
 
-## ES6 Rules
-### 1. Variable Declarations
-- **Rule**: Use `const` by default.
-- **Rule**: Use `let` only if reassignment is explicitly required.
-- **Rule**: Never use `var` due to its unpredictable function-scoping behavior.
+## Editing policy
 
-### 2. Function Writing
-- **Rule**: Use arrow functions (`() => {}`) for short logic and inline callbacks.
-- **Rule**: Avoid arrow functions inside object methods if you rely on a dynamic `this` context.
-- **Rule**: Define default parameter values directly in the function signature instead of checking for `undefined`.
+Prefer the smallest safe change that solves the requested issue.
+Do not refactor for style alone.
+Do not rename public node types, config fields, message fields, or editor ids unless required and covered by tests.
+Keep existing flow JSON compatibility wherever possible.
 
-### 3. Strings & Formatting
-- **Rule**: Use template literals with backticks (`` ` ``) for multi-line strings and dynamic value insertion.
-- **Rule**: Do not use the `+` operator for basic string concatenation.
+Safe default approach:
+1. locate the exact node type and code path
+2. read the matching tests
+3. add or update the narrowest test that proves the change
+4. change runtime logic
+5. change editor/help text only if user-visible behavior changed
+6. run the relevant tests, then the full test suite
 
-### 4. Data Extraction & Assignment
-- **Rule**: Use object and array destructuring to break down values into distinct variables.
-- **Rule**: Use shorthand object property syntax when the property name matches the variable name (`const user = { name };`).
+## Coding conventions
 
-### 5. Collection Handling
-- **Rule**: Use the spread operator (`...`) to clone or combine arrays and objects without mutating original data.
-- **Rule**: Use rest parameters (`...args`) to gather multiple trailing function arguments into a neat array.
-- **Rule**: Rely on built-in array methods like `.map()`, `.filter()`, and `.reduce()` over standard `for` loops for data manipulation.
+Follow the repository formatter, not personal preference:
+- semicolons on
+- double quotes
+- trailing commas `es5`
+- print width 100
+- space width 2
 
-## Node-RED Core Rules & Architecture
-- **Strict Payload Invariance:** Never replace `msg.payload` with a completely different data type without explicitly passing a tracking property or metadata payload.
-- **Property Lifecycle:** Retain incoming properties (like `msg._msgid` and custom metadata) unless explicitly instructed to strip them.
-- **Context Scope Overuse:** Avoid writing persistent state variables to `global` or `flow` contexts inside a standard Function node unless absolutely necessary. Prefer stateless processing or explicit `context` storage.
-- **Fail-Safe Streams:** Every custom node or complex function block must include a clear `try/catch` block that accurately surfaces errors to `node.error(err, msg)` to trigger Node-RED catch nodes.
+Use modern JavaScript, but keep compatibility with the current code style:
+- CommonJS module format
+- `function` for Node-RED constructors
+- `let`/`const` inside runtime logic
+- explicit `done(err)` or `node.error(err, msg)` paths
+- avoid hidden control flow
 
-## Node-RED Style & Formatting
-- **Naming Conventions:**
-  - Custom node properties: camelCase.
-  - Node display names: Sentence case describing the exact action (e.g., "Format sensor data" instead of "function").
-  - Input/Output topics: snake_case or slash-delimited hierarchies (e.g., `device/status`).
-- **Asynchronous Patterns:** Async functions, external API requests, or timeouts *must* explicit call `node.send(msg)` instead of returning a naked object. Use `node.done()` to release execution slots.
+## Node-RED conventions
 
-## Common Pitfalls to Prevent
-- **Uncaught Loops:** Do not emit a mutated message back onto an identical input topic without passing control flags or conditional checks.
-- **Blocking Thread Pools:** Keep computation inside individual JavaScript Function nodes light. Offload intense parsing to exterior services via HTTP/MQTT nodes.
-- **Blind JSON Parsing:** Always validate standard buffers or string inputs before passing them into a `JSON.parse()` wrapper.
+Every runtime constructor must call `RED.nodes.createNode(this, config)` first.
+Config-node references should be resolved with `RED.nodes.getNode(...)`.
+Input handlers should preserve `msg` and use `send`/`done` correctly.
+Close handlers must clean up listeners, clear status, and release Redis connections.
 
-## Node-RED Node Structure
+Editor changes must preserve:
+- property names in `defaults`
+- typedInput wiring and hidden type fields
+- help text consistency
+- existing element ids used by tests and library integration
+- use Node.js native async/await for async functions
 
-- `redis.js` — node logic registered with Node-RED
-- `redis.html` — editor UI definition
+## Redis and ioredis conventions
 
-## References
+Assume Redis connections are long-lived and failure-prone.
+Always think about:
+- ready/error/reconnecting/end states
+- subscriber mode restrictions
+- blocking command shutdown
+- JSON serialization/parsing behavior
+- Redis stream argument shape
+- Lua `NOSCRIPT` recovery
+- cluster vs non-cluster construction
 
-- Node-RED node general guidence: https://nodered.org/docs/creating-nodes/
-- Node.js testing best practices: https://github.com/goldbergyoni/nodejs-testing-best-practices
-```
+Prefer existing ioredis usage patterns already present in this branch before introducing new client APIs.
+
+## Testing expectations
+
+A real Redis server on `127.0.0.1:6379` is required for the current test suite.
+Run:
+- `npm test`
+
+Before committing, also account for:
+- Husky pre-commit calling `npm test`
+- lint-staged formatting staged files with Prettier
+
+If you change behavior, update or add tests in the matching spec file instead of relying on manual reasoning.
+
+## Documentation expectations
+
+When user-visible behavior changes:
+- update the relevant help text in `redis.html`
+- update or add an example flow if it improves discoverability
+- update the matching document under `docs/`
+
+Keep agent-facing docs concise and factual.
+The detailed procedures belong in `docs/`, while this file should stay high-signal.
+
+## Known caution areas
+
+Read the matching code and tests before touching:
+- connection sharing keys
+- shutdown and `quit()`/`disconnect()` behavior
+- `redis-in` blocking loops
+- `xreadgroup` object vs flat payload mapping
+- `xadd` payload normalization
+- `zadd` payload normalization
+- Lua stored-script library metadata and checkbox persistence
+- context storage in `redis-instance`
+- config option evaluation from typedInput / env / JSON / JSONata
+
+## Output quality bar
+
+Any proposed change should be:
+- minimal
+- branch-specific
+- test-backed
+- performance-aware
+- reliable on reconnect/shutdown
+- consistent between runtime and editor
+- understandable by the next maintainer
+
+If a requested change appears to require broader redesign, explain why before changing architecture.
