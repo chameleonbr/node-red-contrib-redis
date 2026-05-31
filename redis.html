@@ -3,7 +3,8 @@
         margin-bottom: 18px;
     }
     #node-config-redis-tabs {
-        min-width: 600px;
+        box-sizing: border-box;
+        width: 100%;
     }
     #node-config-redis-tabs-content {
         min-height: 380px;
@@ -92,11 +93,11 @@
     }
     .redis-config-list-header-basic,
     .redis-config-list-fields-basic {
-        grid-template-columns: minmax(0, 1fr) 64px;
+        grid-template-columns: minmax(0, 1fr) 76px;
     }
     .redis-config-list-header-auth,
     .redis-config-list-fields-auth {
-        grid-template-columns: minmax(0, 1.3fr) 64px minmax(0, 0.8fr) minmax(0, 0.8fr) 34px;
+        grid-template-columns: minmax(0, 1.2fr) 76px minmax(0, 0.8fr) minmax(0, 0.8fr) 34px;
     }
     .redis-config-list-header-auth {
         box-sizing: border-box;
@@ -177,6 +178,9 @@
     .redis-config-inline-message {
         margin-left: 10px;
         color: var(--red-ui-secondary-text-color, #666);
+    }
+    .redis-config-inline-message.redis-config-error {
+        color: var(--red-ui-form-input-error-color, #c00);
     }
 </style>
 
@@ -694,7 +698,7 @@
 
             function prettifyEditorJson() {
                 var message = $("#redis-config-options-editor-message");
-                message.text("");
+                message.text("").removeClass("redis-config-error");
                 try {
                     var value = JSON.parse(optionsEditor.getValue() || "{}");
                     var pretty = prettyOptions(value);
@@ -702,7 +706,7 @@
                     setEditorValue(pretty);
                     syncEditorToForm();
                 } catch (err) {
-                    // Not valid JSON - silently ignore
+                    message.text("Invalid JSON").addClass("redis-config-error");
                 }
             }
 
@@ -770,7 +774,7 @@
                 } catch (e) {
                     // Non-JSON content (e.g. AWS dnsLookup appended) - keep existing hidden field value
                 }
-                $("#redis-config-options-editor-message").text("");
+                $("#redis-config-options-editor-message").text("").removeClass("redis-config-error");
             });
             optionsEditor.on("blur", syncEditorToForm);
             $(".redis-config-test-button").on("click", function(evt) {
@@ -864,7 +868,7 @@
                         </div>
                     </div>
                     <div class="form-row">
-                        <label for="redis-config-single-db"><i class="fa fa-database"></i> Logic DB</label>
+                        <label for="redis-config-single-db"><i class="fa fa-database"></i> Logical DB</label>
                         <input type="number" id="redis-config-single-db" class="redis-config-small-input" min="0" placeholder="index">
                     </div>
                     <div class="form-row">
