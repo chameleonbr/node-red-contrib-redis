@@ -1,3 +1,185 @@
+<style>
+    .redis-config-tabs-row {
+        margin-bottom: 18px;
+    }
+    #node-config-redis-tabs {
+        min-width: 600px;
+    }
+    #node-config-redis-tabs-content {
+        min-height: 380px;
+    }
+    #redis-config-tab-connection,
+    #redis-config-tab-options {
+        box-sizing: border-box;
+        min-height: 380px;
+        height: 100%;
+        padding-bottom: 58px;
+        position: relative;
+    }
+    .redis-config-mode-section,
+    .redis-config-provider-section {
+        display: none;
+    }
+    .redis-config-mode-section.redis-config-active-section,
+    .redis-config-provider-section.redis-config-active-section {
+        display: block;
+    }
+    .redis-config-small-input {
+        width: 90px !important;
+    }
+    .redis-config-mode-select {
+        width: 155px !important;
+    }
+    .redis-config-options-type-select {
+        width: 180px !important;
+    }
+    .redis-config-provider-select {
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: calc(100% - 110px);
+    }
+    .redis-config-input {
+        width: calc(100% - 110px) !important;
+    }
+    .redis-config-half-input {
+        width: calc((100% - 110px) / 2) !important;
+    }
+    .redis-config-wide-input {
+        width: calc(100% - 300px) !important;
+    }
+    .redis-config-secondary-label {
+        margin-left: 20px;
+        width: 76px !important;
+    }
+    .redis-config-checkbox {
+        display: inline-block !important;
+        width: 15px !important;
+        height: 15px !important;
+        margin: 0 5px 0 0 !important;
+        vertical-align: -2px !important;
+    }
+    .redis-config-list-row input {
+        box-sizing: border-box;
+    }
+    .redis-config-list-panel {
+        display: inline-block;
+        width: calc(100% - 110px);
+        min-height: 136px;
+        vertical-align: top;
+    }
+    .redis-config-list-panel ol {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        min-height: 136px;
+    }
+    .redis-config-list-header,
+    .redis-config-list-fields {
+        display: grid;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+    }
+    .redis-config-list-header {
+        margin-bottom: 4px;
+        color: var(--red-ui-secondary-text-color, #666);
+        font-size: 12px;
+    }
+    .redis-config-list-header span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .redis-config-list-header-basic,
+    .redis-config-list-fields-basic {
+        grid-template-columns: minmax(0, 1fr) 64px;
+    }
+    .redis-config-list-header-auth,
+    .redis-config-list-fields-auth {
+        grid-template-columns: minmax(0, 1.3fr) 64px minmax(0, 0.8fr) minmax(0, 0.8fr) 34px;
+    }
+    .redis-config-list-header-auth {
+        box-sizing: border-box;
+        padding-right: 34px;
+        position: relative;
+    }
+    .redis-config-list-row input[type="text"],
+    .redis-config-list-row input[type="number"],
+    .redis-config-list-row input[type="password"] {
+        width: 100% !important;
+    }
+    .redis-config-list-tls {
+        text-align: center;
+        white-space: nowrap;
+    }
+    .redis-config-list-tls-heading {
+        text-align: center;
+    }
+    .redis-config-list-delete-heading {
+        display: block;
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 28px;
+        height: 20px;
+    }
+    .redis-config-list-tls .redis-config-checkbox {
+        margin-right: 0 !important;
+    }
+    .redis-config-pw-wrap {
+        display: inline-flex;
+        align-items: center;
+        width: calc(100% - 110px);
+        vertical-align: middle;
+    }
+    .redis-config-pw-wrap input {
+        flex: 1 !important;
+        min-width: 0;
+        width: auto !important;
+    }
+    .redis-config-editor-row {
+        position: relative;
+        height: 260px;
+    }
+    #redis-config-options-editor {
+        position: absolute;
+        inset: 0;
+        border: 1px solid var(--red-ui-form-input-border-color, #ccc);
+        border-radius: 4px;
+    }
+    .redis-config-test-row {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        margin: 0;
+        padding-left: 0;
+    }
+    .redis-config-test-message {
+        flex: 1;
+        color: var(--red-ui-secondary-text-color, #666);
+        text-align: right;
+    }
+    .redis-config-test-button {
+        flex: 0 0 auto;
+        order: 2;
+    }
+    .redis-config-raw-help {
+        margin-left: 104px;
+        color: var(--red-ui-secondary-text-color, #666);
+        font-size: 12px;
+        line-height: 1.4em;
+    }
+    .redis-config-inline-message {
+        margin-left: 10px;
+        color: var(--red-ui-secondary-text-color, #666);
+    }
+</style>
+
 <script type="text/javascript">
     "use strict";
     /*global RED*/
@@ -11,7 +193,7 @@
             options: {
                 value: "{}",
                 required: true,
-                validate: RED.validators.typedInput("optionsType"),
+                validate: RED.validators.typedInput("optionsType", true),
 
             },
             cluster: {
@@ -23,30 +205,781 @@
             return this.name || "Redis host";
         },
         oneditprepare: function () {
-            $("#node-config-input-options").typedInput({
-                default: 'str',
-                typeField: "#node-config-input-optionsType",
-                types: ['str', 'env', 'json', 'jsonata']
+            var node = this;
+            var isSyncing = false;
+            var optionsEditor = null;
+            var redisConfigTabs = RED.tabs.create({
+                id: "node-config-redis-tabs",
+                onchange: function(tab) {
+                    $("#node-config-redis-tabs-content").children().hide();
+                    $("#" + tab.id).show();
+                    resizeConfigLayout();
+                    if (optionsEditor) {
+                        setTimeout(function() {
+                            optionsEditor.resize();
+                        }, 0);
+                    }
+                }
+            });
+            redisConfigTabs.addTab({
+                id: "redis-config-tab-connection",
+                label: "Connection"
+            });
+            redisConfigTabs.addTab({
+                id: "redis-config-tab-options",
+                label: "ConnString"
             });
 
+            function asNumber(value, fallback) {
+                if (value === undefined || value === null || value === "") {
+                    return fallback;
+                }
+                var parsed = Number(value);
+                return Number.isNaN(parsed) ? fallback : parsed;
+            }
+
+            function parseEndpoint(value, defaultPort) {
+                var endpoint = (value || "").trim();
+                if (!endpoint) {
+                    return {
+                        host: "",
+                        port: defaultPort
+                    };
+                }
+                var port = defaultPort;
+                var host = endpoint;
+                var bracketMatch = endpoint.match(/^\[([^\]]+)\](?::(\d+))?$/);
+                if (bracketMatch) {
+                    host = bracketMatch[1];
+                    if (bracketMatch[2]) {
+                        port = asNumber(bracketMatch[2], defaultPort);
+                    }
+                } else {
+                    var portMatch = endpoint.match(/^(.*):(\d+)$/);
+                    if (portMatch && portMatch[1].indexOf(":") === -1) {
+                        host = portMatch[1];
+                        port = asNumber(portMatch[2], defaultPort);
+                    }
+                }
+                return {
+                    host: host,
+                    port: port
+                };
+            }
+
+            function formatEndpoint(host, port) {
+                if (!host) {
+                    return "";
+                }
+                if (host.indexOf(":") !== -1 && host[0] !== "[") {
+                    return "[" + host + "]:" + port;
+                }
+                return host + ":" + port;
+            }
+
+            function parseJsonOptions() {
+                if (optionsEditor) {
+                    var editorValue = optionsEditor.getValue();
+                    if (editorValue && editorValue.trim()) {
+                        try {
+                            return JSON.parse(editorValue);
+                        } catch (ignore) {
+                            // Fall through to hidden field (e.g. AWS dnsLookup appended)
+                        }
+                    }
+                }
+                var optionsValue = $("#node-config-input-options").val();
+                if (!optionsValue) {
+                    return null;
+                }
+                try {
+                    return JSON.parse(optionsValue);
+                } catch (ignore) {
+                    return null;
+                }
+            }
+
+            function prettyOptions(value) {
+                return JSON.stringify(value, null, 2);
+            }
+
+            function setEditorValue(value) {
+                if (!optionsEditor) {
+                    return;
+                }
+                var cursor = optionsEditor.getCursorPosition();
+                optionsEditor.setValue(value, -1);
+                if (typeof optionsEditor.moveCursorToPosition === "function") {
+                    optionsEditor.moveCursorToPosition(cursor);
+                } else if (typeof optionsEditor.moveCursorTo === "function") {
+                    optionsEditor.moveCursorTo(cursor.row, cursor.column);
+                }
+            }
+
+            function hasTls(options) {
+                return !!(options && options.tls);
+            }
+
+            function applyOptionalConnectionOptions(target, source) {
+                var username = (source.username || "").trim();
+                var password = source.password || "";
+                var db = source.db;
+                if (username) {
+                    target.username = username;
+                }
+                if (password) {
+                    target.password = password;
+                }
+                if (db !== undefined && db !== null && db !== "") {
+                    target.db = asNumber(db, 0);
+                }
+                if (source.tls) {
+                    target.tls = {};
+                }
+                return target;
+            }
+
+            function cleanKnownSingleKeys(options) {
+                var copy = {};
+                if (Array.isArray(options)) {
+                    return copy;
+                }
+                Object.keys(options || {}).forEach(function(key) {
+                    if (["host", "port", "username", "password", "db", "tls"].indexOf(key) === -1) {
+                        copy[key] = options[key];
+                    }
+                });
+                return copy;
+            }
+
+            function cleanKnownClusterNodeKeys(options) {
+                var copy = {};
+                Object.keys(options || {}).forEach(function(key) {
+                    if (["host", "port", "username", "password", "db", "tls"].indexOf(key) === -1) {
+                        copy[key] = options[key];
+                    }
+                });
+                return copy;
+            }
+
+            function cleanKnownSentinelKeys(options) {
+                var copy = {};
+                if (Array.isArray(options)) {
+                    return copy;
+                }
+                Object.keys(options || {}).forEach(function(key) {
+                    if ([
+                        "sentinels",
+                        "name",
+                        "role",
+                        "username",
+                        "password",
+                        "tls",
+                        "sentinelUsername",
+                        "sentinelPassword",
+                        "sentinelTLS"
+                    ].indexOf(key) === -1) {
+                        copy[key] = options[key];
+                    }
+                });
+                return copy;
+            }
+
+            function getListItems(selector) {
+                var rows = [];
+                $(selector).editableList("items").each(function() {
+                    var row = $(this);
+                    var item = {
+                        host: row.find(".redis-config-node-host").val(),
+                        port: row.find(".redis-config-node-port").val()
+                    };
+                    if (row.find(".redis-config-node-username").length) {
+                        item.username = row.find(".redis-config-node-username").val();
+                        item.password = row.find(".redis-config-node-password").val();
+                        item.tls = row.find(".redis-config-node-tls").is(":checked");
+                    }
+                    rows.push(item);
+                });
+                return rows;
+            }
+
+            function setListItems(selector, items, defaultPort) {
+                var list = $(selector);
+                list.editableList("empty");
+                (items || []).forEach(function(item) {
+                    list.editableList("addItem", item);
+                });
+                if (!items || items.length === 0) {
+                    list.editableList("addItem", {
+                        host: "127.0.0.1",
+                        port: defaultPort
+                    });
+                }
+            }
+
+            function createNodeList(selector, defaultPort, options) {
+                options = options || {};
+                var hasAuthFields = !!options.authFields;
+                $(selector).editableList({
+                    addButton: true,
+                    removable: true,
+                    height: hasAuthFields ? 176 : 136,
+                    addItem: function(row, index, data) {
+                        var item = data || {};
+                        row.addClass("redis-config-list-row");
+                        var fields = $("<div>", {
+                            class: "redis-config-list-fields " + (hasAuthFields ? "redis-config-list-fields-auth" : "redis-config-list-fields-basic")
+                        }).appendTo(row);
+                        $("<input>", {
+                            type: "text",
+                            class: "redis-config-node-host",
+                            placeholder: "Host"
+                        }).val(item.host || "127.0.0.1").appendTo(fields);
+                        $("<input>", {
+                            type: "number",
+                            class: "redis-config-node-port",
+                            placeholder: "Port",
+                            min: 0
+                        }).val(item.port || defaultPort).appendTo(fields);
+                        if (hasAuthFields) {
+                            $("<input>", {
+                                type: "text",
+                                class: "redis-config-node-username",
+                                placeholder: "Username"
+                            }).val(item.username || "").appendTo(fields);
+                            $("<input>", {
+                                type: "password",
+                                class: "redis-config-node-password",
+                                placeholder: "Password"
+                            }).val(item.password || "").appendTo(fields);
+                            $("<span>", {
+                                class: "redis-config-list-tls"
+                            }).append($("<input>", {
+                                type: "checkbox",
+                                class: "redis-config-node-tls redis-config-checkbox"
+                            }).prop("checked", hasTls(item))).appendTo(fields);
+                        }
+                        row.find("input").on("change keyup", syncConnectionToEditor);
+                    }
+                });
+            }
+
+            function buildSingleOptions(existing) {
+                var base = cleanKnownSingleKeys(existing || {});
+                base.host = ($("#redis-config-single-host").val() || "127.0.0.1").trim();
+                base.port = asNumber($("#redis-config-single-port").val(), 6379);
+                return applyOptionalConnectionOptions(base, {
+                    username: $("#redis-config-single-username").val(),
+                    password: $("#redis-config-single-password").val(),
+                    db: $("#redis-config-single-db").val(),
+                    tls: $("#redis-config-single-tls").is(":checked")
+                });
+            }
+
+            function buildClusterOptions(existing) {
+                var existingNodes = Array.isArray(existing) ? existing : [];
+                var provider = $("#redis-config-cluster-provider").val();
+                var auth = {
+                    username: $("#redis-config-cluster-username").val(),
+                    password: $("#redis-config-cluster-password").val(),
+                    tls: $("#redis-config-cluster-tls").is(":checked")
+                };
+                if (provider === "aws") {
+                    var endpoint = parseEndpoint($("#redis-config-aws-endpoint").val(), 6379);
+                    var awsNode = Object.assign({}, cleanKnownClusterNodeKeys(existingNodes[0]), {
+                        host: endpoint.host || "clustercfg.my-cluster.abc123.memorydb.ap-southeast-2.amazonaws.com",
+                        port: endpoint.port
+                    });
+                    delete awsNode.db;
+                    awsNode = applyOptionalConnectionOptions(awsNode, {
+                        username: auth.username,
+                        password: auth.password,
+                        tls: false
+                    });
+                    awsNode.dnsLookupStrategy = "identity";
+                    return [awsNode];
+                }
+                return getListItems("#redis-config-cluster-nodes").map(function(item, index) {
+                    var nodeOptions = Object.assign({}, cleanKnownClusterNodeKeys(existingNodes[index]), {
+                        host: (item.host || "127.0.0.1").trim(),
+                        port: asNumber(item.port, 6379)
+                    });
+                    delete nodeOptions.db;
+                    return applyOptionalConnectionOptions(nodeOptions, {
+                        username: item.username,
+                        password: item.password,
+                        tls: item.tls
+                    });
+                });
+            }
+
+            function buildSentinelOptions(existing) {
+                var base = cleanKnownSentinelKeys(existing || {});
+                var sentinelItems = getListItems("#redis-config-sentinel-nodes");
+                base.name = ($("#redis-config-sentinel-master").val() || "mymaster").trim();
+                base.sentinels = sentinelItems.map(function(item) {
+                    return {
+                        host: (item.host || "127.0.0.1").trim(),
+                        port: asNumber(item.port, 26379)
+                    };
+                });
+                var sentinelAuth = sentinelItems.find(function(item) {
+                    return (item.username || "").trim() || item.password || item.tls;
+                });
+                if (sentinelAuth) {
+                    var sentinelUsername = (sentinelAuth.username || "").trim();
+                    if (sentinelUsername) {
+                        base.sentinelUsername = sentinelUsername;
+                    }
+                    if (sentinelAuth.password) {
+                        base.sentinelPassword = sentinelAuth.password;
+                    }
+                    if (sentinelAuth.tls) {
+                        base.sentinelTLS = {};
+                    }
+                }
+                return base;
+            }
+
+            function detectMode(options) {
+                if ($("#node-config-input-cluster").is(":checked") || Array.isArray(options)) {
+                    return "cluster";
+                }
+                if (options && Array.isArray(options.sentinels)) {
+                    return "sentinel";
+                }
+                return "single";
+            }
+
+            function detectClusterProvider(options) {
+                var nodes = Array.isArray(options) ? options : [];
+                var host = nodes[0] && nodes[0].host ? nodes[0].host : "";
+                if (nodes.length === 1 && (/^clustercfg\./.test(host) || /\.memorydb\./.test(host) || /\.cache\.amazonaws\.com$/.test(host))) {
+                    return "aws";
+                }
+                return "cluster";
+            }
+
+            function populateFormFromOptions(options) {
+                isSyncing = true;
+                var mode = detectMode(options);
+                $("#redis-config-mode").val(mode);
+                $("#node-config-input-cluster").prop("checked", mode === "cluster");
+
+                if (mode === "cluster") {
+                    var nodes = Array.isArray(options) ? options : [];
+                    var provider = detectClusterProvider(options);
+                    var firstNode = nodes[0] || {};
+                    $("#redis-config-cluster-provider").val(provider);
+                    $("#redis-config-cluster-username").val(firstNode.username || "");
+                    $("#redis-config-cluster-password").val(firstNode.password || "");
+                    $("#redis-config-cluster-tls").prop("checked", hasTls(firstNode));
+                    if (provider === "aws") {
+                        $("#redis-config-aws-endpoint").val(formatEndpoint(firstNode.host || "clustercfg.my-cluster.abc123.memorydb.ap-southeast-2.amazonaws.com", firstNode.port || 6379));
+                        $("#redis-config-cluster-tls").prop("checked", firstNode.tls !== undefined ? hasTls(firstNode) : true);
+                    } else {
+                        setListItems("#redis-config-cluster-nodes", nodes.map(function(item) {
+                            return {
+                                host: item.host || "127.0.0.1",
+                                port: item.port || 6379,
+                                username: item.username || "",
+                                password: item.password || "",
+                                tls: hasTls(item)
+                            };
+                        }), 6379);
+                    }
+                } else if (mode === "sentinel") {
+                    $("#redis-config-sentinel-master").val((options && options.name) || "mymaster");
+                    var sentinelUsername = (options && options.sentinelUsername) || "";
+                    var sentinelPassword = (options && options.sentinelPassword) || "";
+                    var sentinelTls = !!(options && options.sentinelTLS);
+                    setListItems("#redis-config-sentinel-nodes", (options.sentinels || []).map(function(item) {
+                        return {
+                            host: item.host || "127.0.0.1",
+                            port: item.port || 26379,
+                            username: item.username || sentinelUsername,
+                            password: item.password || sentinelPassword,
+                            tls: item.tls !== undefined ? hasTls(item) : sentinelTls
+                        };
+                    }), 26379);
+                } else {
+                    options = options || {};
+                    $("#redis-config-single-host").val(options.host || "127.0.0.1");
+                    $("#redis-config-single-port").val(options.port || 6379);
+                    $("#redis-config-single-username").val(options.username || "");
+                    $("#redis-config-single-password").val(options.password || "");
+                    $("#redis-config-single-db").val(options.db === undefined || options.db === null ? "" : options.db);
+                    $("#redis-config-single-tls").prop("checked", hasTls(options));
+                }
+                isSyncing = false;
+                updateVisibility();
+            }
+
+            function updateVisibility() {
+                var mode = $("#redis-config-mode").val();
+                var provider = $("#redis-config-cluster-provider").val();
+                $(".redis-config-mode-section, .redis-config-provider-section").removeClass("redis-config-active-section").hide();
+                $("#redis-config-" + mode + "-section").addClass("redis-config-active-section").show();
+                if (mode === "cluster") {
+                    if (provider === "cluster") {
+                        $("#redis-config-cluster-manual-section").addClass("redis-config-active-section").show();
+                        $("#redis-config-cluster-tls").prop("disabled", false);
+                    } else {
+                        $("#redis-config-cluster-aws-section").addClass("redis-config-active-section").show();
+                        $("#redis-config-cluster-auth-section").addClass("redis-config-active-section").show();
+                        $("#redis-config-cluster-tls").prop("checked", true).prop("disabled", true);
+                    }
+                }
+                $("#node-config-input-cluster").prop("checked", mode === "cluster");
+                if (mode === "cluster" && provider === "cluster" && $("#redis-config-cluster-nodes").editableList("items").length === 0) {
+                    setListItems("#redis-config-cluster-nodes", [], 6379);
+                }
+                if (mode === "sentinel" && $("#redis-config-sentinel-nodes").editableList("items").length === 0) {
+                    setListItems("#redis-config-sentinel-nodes", [], 26379);
+                }
+            }
+
+            function syncConnectionToEditor() {
+                if (isSyncing || $("#redis-config-options-type").val() !== "json") {
+                    return;
+                }
+                var existing = parseJsonOptions();
+                var mode = $("#redis-config-mode").val();
+                var provider = $("#redis-config-cluster-provider").val();
+                var value;
+                if (mode === "cluster") {
+                    value = buildClusterOptions(existing);
+                } else if (mode === "sentinel") {
+                    value = buildSentinelOptions(existing);
+                } else {
+                    value = buildSingleOptions(existing);
+                }
+                var jsonStr = prettyOptions(value);
+                $("#node-config-input-options").val(jsonStr);
+                setEditorValue(jsonStr);
+            }
+
+            function syncEditorToForm() {
+                if ($("#redis-config-options-type").val() !== "json") {
+                    return;
+                }
+                var value = parseJsonOptions();
+                if (value) {
+                    populateFormFromOptions(value);
+                }
+            }
+
+            function updateOptionsType() {
+                var type = $("#redis-config-options-type").val();
+                var labels = {
+                    env: "Variable"
+                };
+                var placeholders = {
+                    env: "REDIS_OPTIONS"
+                };
+                var help = {
+                    env: "Reads the environment variable whose name is entered here. If that environment value is valid JSON, the runtime parses it before connecting."
+                };
+                $("#node-config-input-optionsType").val(type);
+                $(".redis-config-json-only").toggle(type === "json");
+                $(".redis-config-raw-only").toggle(type !== "json");
+                $("#redis-config-prettify-options").toggle(type === "json");
+                if (type !== "json") {
+                    $("#redis-config-options-raw-label").text(labels[type] || "Value");
+                    $("#redis-config-options-raw").attr("placeholder", placeholders[type] || "");
+                    $("#redis-config-options-raw-help").text(help[type] || "");
+                    $("#redis-config-options-raw").val($("#node-config-input-options").val());
+                }
+            }
+
+            function prettifyEditorJson() {
+                var message = $("#redis-config-options-editor-message");
+                message.text("");
+                try {
+                    var value = JSON.parse(optionsEditor.getValue() || "{}");
+                    var pretty = prettyOptions(value);
+                    $("#node-config-input-options").val(pretty);
+                    setEditorValue(pretty);
+                    syncEditorToForm();
+                } catch (err) {
+                    // Not valid JSON - silently ignore
+                }
+            }
+
+            function showTestPlaceholder(target) {
+                $(target).text("Test hook is not implemented yet.");
+            }
+
+            function resizeConfigLayout() {
+                var content = $("#node-config-redis-tabs-content");
+                var container = content.closest(".red-ui-tray-content");
+                if (!container.length) {
+                    container = content.closest("#dialog-form");
+                }
+                if (!container.length || !content.length) {
+                    return;
+                }
+                var availableHeight = container[0].getBoundingClientRect().bottom - content[0].getBoundingClientRect().top - 4;
+                content.height(Math.max(380, availableHeight));
+            }
+
+            createNodeList("#redis-config-cluster-nodes", 6379, { authFields: true });
+            createNodeList("#redis-config-sentinel-nodes", 26379, { authFields: true });
+            node.redisConfigResizeLayout = resizeConfigLayout;
+
+            optionsEditor = RED.editor.createEditor({
+                id: "redis-config-options-editor",
+                mode: "ace/mode/json",
+                value: $("#node-config-input-options").val() || "{}"
+            });
+            node.redisConfigOptionsEditor = optionsEditor;
+
+            $("#redis-config-options-type").val(this.optionsType === "env" ? "env" : "json");
+            updateOptionsType();
+
+            var initialOptions = parseJsonOptions();
+            populateFormFromOptions(initialOptions || {});
+            if ($("#redis-config-options-type").val() === "json") {
+                syncConnectionToEditor();
+            }
+
+            $("#redis-config-mode, #redis-config-cluster-provider").on("change input click keyup", function() {
+                updateVisibility();
+                syncConnectionToEditor();
+                setTimeout(updateVisibility, 0);
+            });
+            $("#redis-config-connection-tab input, #redis-config-connection-tab select").on("change keyup", syncConnectionToEditor);
+            $("#redis-config-options-type").on("change", function() {
+                updateOptionsType();
+                if ($("#redis-config-options-type").val() === "json") {
+                    syncConnectionToEditor();
+                }
+            });
+            $("#redis-config-options-raw").on("change keyup", function() {
+                $("#node-config-input-options").val($(this).val());
+            });
+            $("#redis-config-prettify-options").on("click", function(evt) {
+                evt.preventDefault();
+                prettifyEditorJson();
+            });
+            optionsEditor.getSession().on("change", function() {
+                var content = optionsEditor.getValue();
+                try {
+                    JSON.parse(content);
+                    $("#node-config-input-options").val(content);
+                } catch (e) {
+                    // Non-JSON content (e.g. AWS dnsLookup appended) - keep existing hidden field value
+                }
+                $("#redis-config-options-editor-message").text("");
+            });
+            optionsEditor.on("blur", syncEditorToForm);
+            $(".redis-config-test-button").on("click", function(evt) {
+                evt.preventDefault();
+                showTestPlaceholder($(this).siblings(".redis-config-test-message"));
+            });
+
+            setTimeout(function() {
+                resizeConfigLayout();
+                redisConfigTabs.resize();
+                optionsEditor.resize();
+            }, 0);
+        },
+        oneditsave: function () {
+            var type = $("#redis-config-options-type").val() || "json";
+            $("#node-config-input-optionsType").val(type);
+            if (type === "json" && this.redisConfigOptionsEditor) {
+                var editorVal = this.redisConfigOptionsEditor.getValue();
+                try {
+                    JSON.parse(editorVal);
+                    $("#node-config-input-options").val(editorVal);
+                } catch (e) {
+                    // Non-JSON editor content (e.g. AWS dnsLookup appended) -
+                    // keep the hidden field value set by syncConnectionToEditor
+                }
+            } else if (type !== "json") {
+                $("#node-config-input-options").val($("#redis-config-options-raw").val());
+            }
+            $("#node-config-input-cluster").prop("checked", $("#redis-config-mode").val() === "cluster");
+            if (this.redisConfigOptionsEditor) {
+                this.redisConfigOptionsEditor.destroy();
+                this.redisConfigOptionsEditor = null;
+            }
+            this.redisConfigResizeLayout = null;
+        },
+        oneditcancel: function () {
+            if (this.redisConfigOptionsEditor) {
+                this.redisConfigOptionsEditor.destroy();
+                this.redisConfigOptionsEditor = null;
+            }
+            this.redisConfigResizeLayout = null;
+        },
+        oneditresize: function () {
+            if (this.redisConfigResizeLayout) {
+                this.redisConfigResizeLayout();
+            }
+            if (this.redisConfigOptionsEditor) {
+                this.redisConfigOptionsEditor.resize();
+            }
         }
     });
 </script>
 
 <script type="text/x-red" data-template-name="redis-config">
     <div class="form-row">
-        <label for="node-config-input-name"><i class="fa fa-server"></i> Name</label>
-        <input type="text" id="node-config-input-name">
+        <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-config-input-name" placeholder="Name">
     </div>
-    <div class="form-row">
-        <label for="node-config-input-options"><i class="fa fa-cog"></i> Options</label>
-        <input type="text" id="node-config-input-options">
-        <input type="hidden" id="node-config-input-optionsType">
+    <div class="form-row redis-config-tabs-row">
+        <ul id="node-config-redis-tabs"></ul>
     </div>
-    <div class="form-row">
-        <label for="node-config-input-cluster">&nbsp;</label>
-        <input type="checkbox" id="node-config-input-cluster" style="display:inline-block; width:15px; vertical-align:baseline;"> Cluster
+    <div id="node-config-redis-tabs-content">
+        <div id="redis-config-tab-connection">
+            <div id="redis-config-connection-tab">
+                <div class="form-row">
+                    <label for="redis-config-mode"><i class="fa fa-random"></i> Redis Mode</label>
+                    <select id="redis-config-mode" class="redis-config-mode-select">
+                        <option value="single">Single</option>
+                        <option value="cluster">Cluster</option>
+                        <option value="sentinel">Sentinel</option>
+                    </select>
+                </div>
+
+                <div id="redis-config-single-section" class="redis-config-mode-section">
+                    <div class="form-row">
+                        <label for="redis-config-single-host"><i class="fa fa-globe"></i> Host</label>
+                        <input type="text" id="redis-config-single-host" class="redis-config-input" placeholder="127.0.0.1">
+                    </div>
+                    <div class="form-row">
+                        <label for="redis-config-single-port"><i class="fa fa-sign-in"></i> Port</label>
+                        <input type="number" id="redis-config-single-port" class="redis-config-small-input" placeholder="6379" min="0">
+                    </div>
+                    <div class="form-row">
+                        <label for="redis-config-single-username"><i class="fa fa-user"></i> Username</label>
+                        <input type="text" id="redis-config-single-username" class="redis-config-input">
+                    </div>
+                    <div class="form-row">
+                        <label for="redis-config-single-password"><i class="fa fa-lock"></i> Password</label>
+                        <div class="redis-config-pw-wrap">
+                            <input type="password" id="redis-config-single-password">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <label for="redis-config-single-db"><i class="fa fa-database"></i> Logic DB</label>
+                        <input type="number" id="redis-config-single-db" class="redis-config-small-input" min="0" placeholder="index">
+                    </div>
+                    <div class="form-row">
+                        <label for="redis-config-single-tls"><i class="fa fa-shield"></i> Security</label>
+                        <input type="checkbox" id="redis-config-single-tls" class="redis-config-checkbox">
+                        <span>Use TLS</span>
+                    </div>
+                </div>
+
+                <div id="redis-config-cluster-section" class="redis-config-mode-section">
+                    <div class="form-row">
+                        <label for="redis-config-cluster-provider"><i class="fa fa-sitemap"></i> Provider</label>
+                        <select id="redis-config-cluster-provider" class="redis-config-provider-select">
+                            <option value="cluster">Redis Cluster</option>
+                            <option value="aws">AWS MemoryDB / ElastiCache</option>
+                        </select>
+                    </div>
+                    <div id="redis-config-cluster-manual-section" class="redis-config-provider-section">
+                        <div class="form-row" style="margin-bottom: 2px;">
+                            <label><i class="fa fa-server"></i> Nodes</label>
+                        </div>
+                        <div class="form-row" style="margin-bottom: 6px;">
+                            <div class="redis-config-list-panel" style="width: 100% !important; display: block;">
+                                <div class="redis-config-list-header redis-config-list-header-auth">
+                                    <span>Host</span>
+                                    <span>Port</span>
+                                    <span>Username</span>
+                                    <span>Password</span>
+                                    <span class="redis-config-list-tls-heading">TLS</span>
+                                    <span class="redis-config-list-delete-heading"></span>
+                                </div>
+                                <ol id="redis-config-cluster-nodes"></ol>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="redis-config-cluster-aws-section" class="redis-config-provider-section">
+                        <div class="form-row">
+                            <label for="redis-config-aws-endpoint"><i class="fa fa-globe"></i> Endpoint</label>
+                            <input type="text" id="redis-config-aws-endpoint" class="redis-config-input" placeholder="clustercfg.my-cluster.abc123.memorydb.ap-southeast-2.amazonaws.com:6379">
+                        </div>
+                    </div>
+                    <div id="redis-config-cluster-auth-section" class="redis-config-provider-section">
+                        <div class="form-row">
+                            <label for="redis-config-cluster-username"><i class="fa fa-user"></i> Username</label>
+                            <input type="text" id="redis-config-cluster-username" class="redis-config-input">
+                        </div>
+                        <div class="form-row">
+                            <label for="redis-config-cluster-password"><i class="fa fa-lock"></i> Password</label>
+                            <div class="redis-config-pw-wrap">
+                                <input type="password" id="redis-config-cluster-password">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <label for="redis-config-cluster-tls"><i class="fa fa-shield"></i> Security</label>
+                            <input type="checkbox" id="redis-config-cluster-tls" class="redis-config-checkbox">
+                            <span>Use TLS</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="redis-config-sentinel-section" class="redis-config-mode-section">
+                    <div class="form-row">
+                        <label for="redis-config-sentinel-master"><i class="fa fa-tag"></i> Name</label>
+                        <input type="text" id="redis-config-sentinel-master" class="redis-config-half-input" placeholder="mymaster">
+                    </div>
+                    <div class="form-row" style="margin-bottom: 2px;">
+                        <label><i class="fa fa-server"></i> Sentinels</label>
+                    </div>
+                    <div class="form-row" style="margin-bottom: 6px;">
+                        <div class="redis-config-list-panel" style="width: 100% !important; display: block;">
+                            <div class="redis-config-list-header redis-config-list-header-auth">
+                                <span>Host</span>
+                                <span>Port</span>
+                                <span>Username</span>
+                                <span>Password</span>
+                                <span class="redis-config-list-tls-heading">TLS</span>
+                                <span class="redis-config-list-delete-heading"></span>
+                            </div>
+                            <ol id="redis-config-sentinel-nodes"></ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="form-row redis-config-test-row">
+                <button type="button" class="red-ui-button redis-config-test-button"><i class="fa fa-plug"></i> Test connection</button>
+                <span class="redis-config-test-message"></span>
+            </div>
+        </div>
+        <div id="redis-config-tab-options" style="display:none">
+            <div class="form-row">
+                <label for="redis-config-options-type"><i class="fa fa-code"></i> Type</label>
+                <select id="redis-config-options-type" class="redis-config-options-type-select">
+                    <option value="json">JSON</option>
+                    <option value="env">Environment variable</option>
+                </select>
+                <button type="button" class="red-ui-button" id="redis-config-prettify-options"><i class="fa fa-magic"></i> Prettify</button>
+                <span id="redis-config-options-editor-message" class="redis-config-inline-message"></span>
+            </div>
+            <div class="form-row redis-config-json-only redis-config-editor-row">
+                <div id="redis-config-options-editor" class="node-text-editor"></div>
+            </div>
+            <div class="form-row redis-config-raw-only" style="display:none">
+                <label for="redis-config-options-raw"><i class="fa fa-cog"></i> <span id="redis-config-options-raw-label">Value</span></label>
+                <input type="text" id="redis-config-options-raw">
+            </div>
+            <div class="form-row redis-config-raw-only redis-config-raw-help" id="redis-config-options-raw-help" style="display:none"></div>
+            <div class="form-row redis-config-test-row">
+                <button type="button" class="red-ui-button redis-config-test-button"><i class="fa fa-plug"></i> Test connection</button>
+                <span class="redis-config-test-message"></span>
+            </div>
+        </div>
     </div>
+    <input type="hidden" id="node-config-input-options">
+    <input type="hidden" id="node-config-input-optionsType">
+    <input type="checkbox" id="node-config-input-cluster" style="display:none;">
 </script>
 
 <script type="text/x-red" data-help-name="redis-config">
@@ -61,15 +994,21 @@ This configuration node is shared by all redis nodes that reference it.</p>
     <dd>
         Connection options passed directly to
         <a href="https://github.com/redis/ioredis" target="_blank">ioredis</a>.
-        Must be a valid JSON object (or an array when <strong>Cluster</strong> is enabled).
-        The default <code>{}</code> connects to <code>127.0.0.1:6379</code> with no
-        authentication.<br><br>
+        Use the <strong>Connection</strong> tab for common settings, or edit the generated
+        JSON in <strong>ConnString</strong> for advanced options.
+        In single or sentinel mode this is a JSON object. In cluster mode it is a JSON
+        array of startup nodes. The default single Redis connection uses
+        <code>127.0.0.1:6379</code> with no authentication.
+        When <strong>Environment</strong> is selected in <strong>ConnString</strong>, enter the
+        environment variable name in the <strong>Variable</strong> field. The runtime reads that
+        variable and parses it as JSON when possible.<br><br>
         Common options:
         <ul>
             <li><code>{"host": "my-redis", "port": 6379}</code></li>
             <li><code>{"host": "redis", "port": 6379, "password": "secret"}</code></li>
             <li><code>{"host": "redis", "port": 6380, "tls": {}}</code> &mdash; TLS/SSL</li>
             <li><code>{"host": "redis", "db": 2}</code> &mdash; select database 2</li>
+            <li><code>{"sentinels":[{"host":"sentinel","port":26379}],"name":"mymaster"}</code> &mdash; Sentinel</li>
         </ul>
         See all available options in the
         <a href="https://github.com/redis/ioredis#connect-to-redis" target="_blank">&#8599; ioredis connection documentation</a>.
@@ -78,7 +1017,11 @@ This configuration node is shared by all redis nodes that reference it.</p>
     <dd>Enable when connecting to a
         <a href="https://redis.io/docs/management/scaling/" target="_blank">Redis Cluster</a>.
         In cluster mode <strong>Options</strong> must be a JSON <em>array</em> of seed nodes:<br>
-        <code>[{"host":"node1","port":6379},{"host":"node2","port":6380}]</code>
+        <code>[{"host":"node1","port":6379},{"host":"node2","port":6380}]</code>.
+        Manual cluster seed nodes can define their own <code>username</code>,
+        <code>password</code>, <code>port</code>, and <code>tls</code> values.
+        AWS MemoryDB or ElastiCache cluster configuration endpoints are saved as a single
+        startup node in that same array.
     </dd>
 </dl>
 </script>
