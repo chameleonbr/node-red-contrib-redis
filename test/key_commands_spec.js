@@ -1,20 +1,14 @@
 const helper = require("node-red-node-test-helper");
 const redisNode = require("../redis.js");
 const { cleanupKeys } = require("./helpers/cleanup");
+const { directRedis, redisConfigNode } = require("./helpers/deployment");
 
 helper.init(require.resolve("node-red"));
 
 describe("Key commands", function () {
   this.timeout(5000);
 
-  const configNode = {
-    id: "config1",
-    type: "redis-config",
-    name: "Local",
-    options: '{"host":"127.0.0.1","port":6379}',
-    optionsType: "json",
-    cluster: false,
-  };
+  const configNode = redisConfigNode("config1", "Local");
 
   beforeEach((done) => {
     helper.startServer(done);
@@ -1377,7 +1371,6 @@ describe("Key commands", function () {
   });
 
   it("should DUMP serialize a key and RESTORE deserialize it", function (done) {
-    const Redis = require("ioredis");
     const flow = [
       configNode,
       {
@@ -1448,19 +1441,23 @@ describe("Key commands", function () {
       });
 
       // Use a direct ioredis connection with buffer support to DUMP the key
-      const directClient = new Redis({ host: "127.0.0.1", port: 6379 });
-      directClient.set("test:key:dump", "hello").then(() => {
-        return directClient.callBuffer("DUMP", "test:key:dump");
-      }).then((dumpBuf) => {
-        directClient.disconnect();
-        restoreNode.receive({
-          topic: "test:key:restored",
-          payload: ["0", dumpBuf],
+      const directClient = directRedis();
+      directClient
+        .set("test:key:dump", "hello")
+        .then(() => {
+          return directClient.callBuffer("DUMP", "test:key:dump");
+        })
+        .then((dumpBuf) => {
+          directClient.disconnect();
+          restoreNode.receive({
+            topic: "test:key:restored",
+            payload: ["0", dumpBuf],
+          });
+        })
+        .catch((err) => {
+          directClient.disconnect();
+          done(err);
         });
-      }).catch((err) => {
-        directClient.disconnect();
-        done(err);
-      });
     });
   });
 

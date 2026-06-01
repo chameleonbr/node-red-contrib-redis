@@ -1,20 +1,14 @@
 const helper = require("node-red-node-test-helper");
 const redisNode = require("../redis.js");
 const { cleanupKeys } = require("./helpers/cleanup");
+const { directRedis, redisConfigNode } = require("./helpers/deployment");
 
 helper.init(require.resolve("node-red"));
 
 describe("Bit commands", function () {
   this.timeout(5000);
 
-  const configNode = {
-    id: "config1",
-    type: "redis-config",
-    name: "Local",
-    options: '{"host":"127.0.0.1","port":6379}',
-    optionsType: "json",
-    cluster: false,
-  };
+  const configNode = redisConfigNode("config1", "Local");
 
   beforeEach((done) => {
     helper.startServer(done);
@@ -183,7 +177,6 @@ describe("Bit commands", function () {
   });
 
   it("should BITPOS find first 0 bit position", function (done) {
-    const Redis = require("ioredis");
     const flow = [
       configNode,
       {
@@ -231,7 +224,7 @@ describe("Bit commands", function () {
 
       // Use direct ioredis to SET the binary value correctly
       // Buffer [0xff, 0xf0, 0x00] — first 12 bits are 1, bit 12 is 0
-      const directClient = new Redis({ host: "127.0.0.1", port: 6379 });
+      const directClient = directRedis();
       directClient
         .set("test:bit:pos", Buffer.from([0xff, 0xf0, 0x00]))
         .then(() => {
@@ -313,11 +306,7 @@ describe("Bit commands", function () {
         try {
           msg.payload.should.equal(3);
           delNode.receive({
-            payload: [
-              "test:bit:op1",
-              "test:bit:op2",
-              "test:bit:result",
-            ],
+            payload: ["test:bit:op1", "test:bit:op2", "test:bit:result"],
           });
         } catch (err) {
           done(err);
@@ -326,12 +315,7 @@ describe("Bit commands", function () {
 
       set2Helper.on("input", () => {
         bitopNode.receive({
-          payload: [
-            "AND",
-            "test:bit:result",
-            "test:bit:op1",
-            "test:bit:op2",
-          ],
+          payload: ["AND", "test:bit:result", "test:bit:op1", "test:bit:op2"],
         });
       });
 

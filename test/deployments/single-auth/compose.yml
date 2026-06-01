@@ -1,0 +1,10 @@
+services:
+  redis:
+    image: ${REDIS_STANDALONE_IMAGE:-redis:8.8-alpine}
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro

@@ -1,5 +1,6 @@
 var helper = require("node-red-node-test-helper");
 var redisNode = require("../redis.js");
+var deployment = require("./helpers/deployment");
 
 helper.init(require.resolve("node-red"));
 
@@ -17,14 +18,7 @@ describe("redis-command node", function () {
 
   it("should SET hello=world and GET hello returning world", function (done) {
     var flow = [
-      {
-        id: "config1",
-        type: "redis-config",
-        name: "Local",
-        options: '{"host":"127.0.0.1","port":6379}',
-        optionsType: "json",
-        cluster: false,
-      },
+      deployment.redisConfigNode("config1", "Local"),
       {
         id: "set-node",
         type: "redis-command",

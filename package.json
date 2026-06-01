@@ -5,7 +5,9 @@
   "main": "redis.js",
   "scripts": {
     "prepare": "husky",
-    "test": "mocha \"test/**/*_spec.js\""
+    "test": "node scripts/run-deployment-tests.js",
+    "test:mocha": "mocha",
+    "test:mocha:all": "mocha \"test/**/*_spec.js\""
   },
   "repository": {
     "type": "git",

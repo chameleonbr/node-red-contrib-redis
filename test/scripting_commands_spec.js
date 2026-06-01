@@ -1,7 +1,7 @@
 const helper = require("node-red-node-test-helper");
-const Redis = require("ioredis");
 const redisNode = require("../redis.js");
 const { cleanupKeys } = require("./helpers/cleanup");
+const { directRedis, redisConfigNode } = require("./helpers/deployment");
 
 helper.init(require.resolve("node-red"));
 
@@ -25,14 +25,7 @@ function waitForSha1(node, cb) {
 describe("Scripting commands", function () {
   this.timeout(5000);
 
-  const configNode = {
-    id: "config1",
-    type: "redis-config",
-    name: "Local",
-    options: '{"host":"127.0.0.1","port":6379}',
-    optionsType: "json",
-    cluster: false,
-  };
+  const configNode = redisConfigNode("config1", "Local");
 
   beforeEach((done) => {
     helper.startServer(done);
@@ -140,11 +133,7 @@ describe("Scripting commands", function () {
 
       setHelper.on("input", () => {
         evalroNode.receive({
-          payload: [
-            "return redis.call('GET',KEYS[1])",
-            "1",
-            "test:script:evalro",
-          ],
+          payload: ["return redis.call('GET',KEYS[1])", "1", "test:script:evalro"],
         });
       });
 
@@ -343,7 +332,7 @@ describe("Scripting commands", function () {
         if (err) return done(err);
         // Evict every cached script from Redis so the node's SHA1 is no longer
         // known — the next EVALSHA must return a NOSCRIPT error.
-        const flushClient = new Redis({ host: "127.0.0.1", port: 6379 });
+        const flushClient = directRedis();
         flushClient
           .script("flush")
           .then(() => {

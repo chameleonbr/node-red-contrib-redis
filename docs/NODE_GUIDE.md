@@ -5,31 +5,42 @@ This guide explains the branch-specific behavior of each node type and where to 
 ## `redis-config`
 
 Purpose:
+
 - store Redis options
 - select cluster mode
 
 Key implementation points:
+
 - editor uses typedInput for `options`
 - runtime evaluates `options` using `optionsType`
 - env-string values are parsed as JSON when possible
 - cluster mode constructs `new Redis.Cluster(options)`
+- cluster startup-node `username`/`password` values are also passed as ioredis
+  `redisOptions` so discovered cluster nodes authenticate correctly
+- `dnsLookupStrategy: "identity"` on a cluster startup node enables identity DNS lookup
+  and TLS for AWS MemoryDB/ElastiCache-style configuration endpoints
 
 Safe changes:
+
 - clearer help text
 - stricter validation
 - better examples for JSON/env input
 
 Be careful with:
+
 - `optionsType`
 - env parsing
 - cluster option shape
+- never commit cloud Redis endpoints or credentials in tests, examples, or docs
 
 ## `redis-in`
 
 Purpose:
+
 - receive values from Redis or blocking Redis commands
 
 Current command families:
+
 - list blocking pops
 - sorted-set blocking pops
 - `subscribe`
@@ -37,31 +48,37 @@ Current command families:
 - `xreadgroup`
 
 Message patterns:
+
 - pub/sub emits `topic` and `payload`
 - pattern subscriptions also emit `pattern`
 - blocking pops emit Redis key as `topic`
 - `xreadgroup` emits `stream`, `messageId`, and `payload`
 
 Payload handling:
+
 - when `obj` is true, JSON or field-object parsing is attempted
 - when parsing fails, raw values are forwarded
 - `xreadgroup` returns an object map when `obj` is true, otherwise a flat field/value array
 
 Shutdown rules:
+
 - always remove listeners
 - always clear status
 - force disconnect for blocking shutdown
 
 Read before editing:
+
 - `../test/redis_in_spec.js`
 - `../test/redis_status_spec.js`
 
 ## `redis-out`
 
 Purpose:
+
 - write focused values to Redis
 
 Branch-specific payload shaping:
+
 - `xadd`
   - object payload becomes flattened field/value pairs
   - array payload is passed through
@@ -73,58 +90,70 @@ Branch-specific payload shaping:
 - list push operations accept plain or JSON-stringified payloads depending on `obj`
 
 Read before editing:
+
 - `../test/redis_out_spec.js`
 
 ## `redis-command`
 
 Purpose:
+
 - run generic Redis commands and return the result in `msg.payload`
 
 Behavior:
+
 - `msg.topic` overrides the configured topic/key
 - `msg.payload` overrides static params when provided
 - static params come from JSON typedInput
 - `block` forces a dedicated connection id
 
 Use this node for:
+
 - commands not modeled by `redis-out`
 - Redis modules and advanced commands
 - stream command coverage already exercised in tests
 
 Read before editing:
+
 - `../test/stream_commands_spec.js`
 - `../test/redis_status_spec.js`
 
 ## `redis-lua-script`
 
 Purpose:
+
 - execute Lua scripts against Redis
 
 Behavior:
+
 - unstored scripts use `EVAL`
 - stored scripts load with `SCRIPT LOAD`
 - stored scripts run via `EVALSHA`
 - `NOSCRIPT` falls back to `EVAL`
 
 Input expectations:
+
 - if `keyval > 0`, `msg.payload` must be an array
 - result is always returned in `msg.payload`
 
 Critical editor behaviors:
+
 - library type must remain `lua`
 - extension must remain `.lua`
 - checkbox metadata for `stored` and `block` must use explicit get/set handling
 
 Read before editing:
+
 - `../test/redis_lua_ui_spec.js`
 - `../test/redis_status_spec.js`
 
 ## `redis-instance`
 
 Purpose:
+
 - place a live Redis client into Node-RED context
 
 Behavior:
+
 - stores the client under `flow` or `global` context based on configuration
   (the editor offers only these two; the runtime does `this.context()[node.location]`,
   and there is no `node` accessor on `this.context()`)
@@ -132,10 +161,12 @@ Behavior:
 - shares most lifecycle expectations with other nodes
 
 Use cases:
+
 - advanced Function-node logic
 - custom Redis calls not modeled by built-in nodes
 
 Be careful with:
+
 - context location names
 - topic/key used as the context key
 - close cleanup
@@ -143,6 +174,7 @@ Be careful with:
 ## Editor guidance
 
 When adding fields in `redis.html`:
+
 - use stable `defaults` names
 - add validation in the editor when possible
 - keep runtime fallback validation too
@@ -152,6 +184,7 @@ When adding fields in `redis.html`:
 ## Example flows
 
 Use existing example flows as the first source of user-facing patterns:
+
 - list queue
 - priority queue
 - pub/sub

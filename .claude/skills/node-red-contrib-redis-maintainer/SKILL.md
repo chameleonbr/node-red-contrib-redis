@@ -1,4 +1,3 @@
-
 **`.claude/skills/node-red-contrib-redis-maintainer/SKILL.md`**
 
 name: node-red-contrib-redis-maintainer
@@ -11,6 +10,7 @@ Use this skill when working on this repository's custom Node-RED nodes.
 ## Outcome
 
 Produce the smallest safe change that preserves:
+
 - Node-RED compatibility
 - existing flow contracts
 - runtime/editor alignment
@@ -20,6 +20,7 @@ Produce the smallest safe change that preserves:
 ## Required read order
 
 Read these before making changes:
+
 1. Claude: `CLAUDE.md`, Codex: `AGENTS.md`
 2. `docs/REFERENCE_MAP.md`
 3. `docs/ARCHITECTURE.md`
@@ -32,14 +33,16 @@ Then read the source and test files for the exact node type you will touch.
 ## Source map
 
 Core files:
+
 - `package.json`
 - `redis.js`
 - `redis.html`
 
-Tests (17 spec files, ~237 cases — `ls test/*_spec.js` for the live list):
+Tests (21 spec files — `ls test/*_spec.js` for the live list):
+
 - node behavior/lifecycle: `test/redis_in_spec.js`, `test/redis_out_spec.js`,
   `test/redis_command_spec.js`, `test/redis_status_spec.js`,
-  `test/redis_lua_ui_spec.js` (static HTML parse, no Redis needed)
+  `test/redis_lua_conn_spec.js`, `test/redis_lua_ui_spec.js` (static HTML parse, no Redis needed)
 - command families, all driving `redis-command`: `test/bit_commands_spec.js`,
   `test/geo_commands_spec.js`, `test/hash_commands_spec.js`,
   `test/hyperloglog_commands_spec.js`, `test/key_commands_spec.js`,
@@ -47,9 +50,17 @@ Tests (17 spec files, ~237 cases — `ls test/*_spec.js` for the live list):
   `test/server_commands_spec.js`, `test/set_commands_spec.js`,
   `test/sorted_set_commands_spec.js`, `test/stream_commands_spec.js`,
   `test/string_commands_spec.js`
+- deployment topology: `test/redis_cluster_deployment_spec.js`,
+  `test/redis_sentinel_deployment_spec.js`, `test/memorydb_deployment_spec.js`
 
 Supporting files:
+
 - `test/helpers/cleanup.js`
+- `test/helpers/cluster-prone.js`
+- `test/helpers/deployment.js`
+- `test/helpers/topology.js`
+- `scripts/run-deployment-tests.js`
+- `scripts/ensure-docker-ubuntu.sh`
 - `examples/*.json`
 
 ## Working rules
@@ -57,6 +68,7 @@ Supporting files:
 Do not use other branches as design input.
 
 Prefer this workflow:
+
 1. identify the affected node type and behavior
 2. inspect matching tests first
 3. write or adjust the narrowest failing test
@@ -67,12 +79,14 @@ Prefer this workflow:
 ## Design constraints
 
 Respect Node-RED patterns:
+
 - config nodes are referenced by id and resolved with `RED.nodes.getNode`
 - input handlers should preserve `msg`
 - close handlers must release resources
 - editor `defaults` names are part of compatibility
 
 Respect ioredis constraints:
+
 - pub/sub connections enter subscriber mode
 - blocking commands can require dedicated connections
 - reconnect and shutdown behavior matter
@@ -81,6 +95,7 @@ Respect ioredis constraints:
 ## Change heuristics
 
 Good changes:
+
 - narrow
 - tested
 - branch-specific
@@ -88,6 +103,7 @@ Good changes:
 - low-risk for flows already deployed
 
 Bad changes:
+
 - broad refactors
 - renaming public properties
 - mixing unrelated cleanup with bug fixes
@@ -99,11 +115,13 @@ Bad changes:
 ### Fix a runtime bug
 
 Read:
+
 - matching node section in `docs/NODE_GUIDE.md`
 - matching spec file
 - relevant close/status logic in `redis.js`
 
 Then:
+
 - reproduce with a test
 - change the smallest branch-specific code path
 - verify status and shutdown behavior were not regressed
@@ -111,6 +129,7 @@ Then:
 ### Add a small feature
 
 First decide whether it belongs in:
+
 - `redis-in`
 - `redis-out`
 - `redis-command`
@@ -118,6 +137,7 @@ First decide whether it belongs in:
 - `redis-instance`
 
 If the feature changes user configuration:
+
 - update `redis.html`
 - update help text
 - add or update tests
@@ -127,9 +147,11 @@ If the feature changes user configuration:
 ### Modify Lua/library behavior
 
 Always read:
+
 - `test/redis_lua_ui_spec.js`
 
 Be careful with:
+
 - library type name
 - file extension
 - checkbox persistence
@@ -139,10 +161,12 @@ Be careful with:
 ### Modify streams
 
 Always read:
+
 - `test/stream_commands_spec.js`
 - the stream sections in `test/redis_in_spec.js` and `test/redis_out_spec.js`
 
 Be careful with:
+
 - flat vs object payloads
 - message ids
 - group/consumer semantics
@@ -151,23 +175,28 @@ Be careful with:
 
 ## Verification
 
-Assume a real Redis server must be running on `127.0.0.1:6379`.
+Assume `npm test` owns Redis through Docker. It starts one deployment at a time,
+runs the matching test subset, and tears the deployment down with volumes before
+continuing. The raw Mocha command is for targeted iteration only, when you have
+already started a compatible Redis yourself.
 
 Primary command:
+
 ```bash
 npm test
 ```
 
 Run a single spec while iterating:
+
 ```bash
-npx mocha test/redis_in_spec.js
+npm run test:mocha -- test/redis_in_spec.js
 ```
 
 ## Environment boundary
 
-Redis is expected to be installed and available locally. If it is not installed at all,
-ask the human to install it rather than installing the server package yourself. Otherwise,
-on this development machine you may change Redis when a test needs it (config, `CONFIG SET`,
-ACL, even version) — but capture the original state first and **restore it exactly
-afterward** so results stay reproducible. Never leave Redis stopped, reconfigured, flushed,
-or on a different version when done. Full rules: `docs/TESTING.md`.
+Docker is expected to be available. `npm test` checks Docker and can install Docker Engine
+on supported Ubuntu hosts using Docker's official apt repository flow; it can fall back to
+`sudo -n docker` when direct Docker access has not refreshed after installation. Do not start another
+Redis on the runner ports during the deployment matrix. MemoryDB tests are opt-in through
+environment variables only; never commit MemoryDB endpoints or credentials. Full rules:
+`docs/TESTING.md`.

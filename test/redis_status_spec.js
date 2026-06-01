@@ -2,40 +2,34 @@
 const helper = require("node-red-node-test-helper");
 const redisNode = require("../redis.js");
 const Redis = require("ioredis");
+const {
+    badRedisConfigNode,
+    redisConfigNode,
+} = require("./helpers/deployment");
 
 helper.init(require.resolve("node-red"));
 
 // ── shared config that points at a real local Redis ────────────────────────
-const GOOD_CONFIG = {
-    id: "cfg-good",
-    type: "redis-config",
-    name: "GoodConn",
-    options: '{"host":"127.0.0.1","port":6379}',
-    optionsType: "json",
-    cluster: false,
-};
+const GOOD_CONFIG = redisConfigNode("cfg-good", "GoodConn");
 
 // Bad config: port where nothing listens, so the connection is refused immediately.
-const BAD_CONFIG = {
-    id: "cfg-bad",
-    type: "redis-config",
-    name: "BadConn",
-    options: '{"host":"127.0.0.1","port":6399}',
-    optionsType: "json",
-    cluster: false,
-};
+const BAD_CONFIG = badRedisConfigNode("cfg-bad", "BadConn");
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
 // Waits for node.status() to be called with a matching fill/text, then calls done().
 // Resolves the race where status may fire before OR after we attach the listener.
 function onStatus(node, predicate, done) {
-    node.on("call:status", function (call) {
+    let finished = false;
+    const listener = function (call) {
         const s = call.args[0];
-        if (s && predicate(s)) {
+        if (!finished && s && predicate(s)) {
+            finished = true;
+            node.removeListener("call:status", listener);
             done();
         }
-    });
+    };
+    node.on("call:status", listener);
 }
 
 function isGreen(s) { return s.fill === "green"; }

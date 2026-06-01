@@ -10,7 +10,9 @@ In this repository, reliability comes from preserving existing Node-RED and iore
 ## Standard workflow
 
 ### Understand the request
+
 Identify:
+
 - affected node type
 - runtime behavior
 - editor behavior
@@ -18,45 +20,57 @@ Identify:
 - shutdown/status implications
 
 ### Read before editing
+
 Always read:
+
 - the exact node constructor in `../redis.js`
 - the exact editor definition in `../redis.html`
 - the matching spec file
 
 ### Write the test first when possible
+
 Prefer a regression-style test that:
+
 - fails before the change
 - passes after the change
 - isolates one behavior
 
 ### Implement the minimum fix
+
 Prefer:
+
 - a narrow branch in existing logic
 - a local helper
 - keeping existing field names
 - existing serialization patterns
 
 Avoid:
+
 - unrelated cleanup
 - file splits
 - style-only edits
 - renaming ids or properties
 
 ### Update user-facing documentation
+
 If behavior changes:
+
 - update help text in `../redis.html`
 - update examples when useful
 - update the relevant note in `docs/`
 
 ### Verify
+
 Run:
+
 ```bash
 npm test
 ```
 
-A real Redis server must be listening on `127.0.0.1:6379` or the suite cannot run.
-Run the targeted spec first, then the full suite. Husky also runs `npm test` on
-pre-commit, so a failing suite (or missing Redis) will block your commit.
+`npm test` manages the Docker deployment matrix itself. Run a targeted spec first with
+`npm run test:mocha -- <spec>` only when you have already started a compatible Redis
+deployment yourself. Husky also runs `npm test` on pre-commit, so a failing deployment
+matrix or unavailable Docker will block your commit.
 
 ## Definition of Done
 

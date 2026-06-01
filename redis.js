@@ -10,6 +10,10 @@ module.exports = function (RED) {
   // Returns a cleanup function that removes all attached listeners.
   // onReady is optional; defaults to showing green "connected".
   function attachStatusListeners(node, client, onReady) {
+    if (typeof client.setMaxListeners === "function") {
+      // Shared config connections can legitimately have many node status listeners.
+      client.setMaxListeners(0);
+    }
     var _onReady = onReady || function () {
       node.status({ fill: "green", shape: "dot", text: "connected" });
     };
@@ -532,9 +536,64 @@ function RedisConfig(n) {
         null
       );
     }
+    function buildClusterClient(clusterOptions) {
+      if (Array.isArray(clusterOptions)) {
+        var identityNode = clusterOptions.find(function (nodeOptions) {
+          return nodeOptions && nodeOptions.dnsLookupStrategy === "identity";
+        });
+        var authNode = clusterOptions.find(function (nodeOptions) {
+          return (
+            nodeOptions &&
+            (nodeOptions.username ||
+              nodeOptions.password ||
+              Object.prototype.hasOwnProperty.call(nodeOptions, "tls"))
+          );
+        });
+        var startupNodes = clusterOptions.map(function (nodeOptions) {
+          var startupNode = Object.assign({}, nodeOptions);
+          delete startupNode.dnsLookupStrategy;
+          return startupNode;
+        });
+
+        var clusterClientOptions = {};
+        if (authNode) {
+          clusterClientOptions.redisOptions = {};
+          if (authNode.username) {
+            clusterClientOptions.redisOptions.username = authNode.username;
+          }
+          if (authNode.password) {
+            clusterClientOptions.redisOptions.password = authNode.password;
+          }
+          if (Object.prototype.hasOwnProperty.call(authNode, "tls")) {
+            clusterClientOptions.redisOptions.tls =
+              authNode.tls === true ? {} : authNode.tls;
+          }
+        }
+
+        if (identityNode) {
+          clusterClientOptions.dnsLookup = function (address, callback) {
+            callback(null, address);
+          };
+          clusterClientOptions.redisOptions =
+            clusterClientOptions.redisOptions || {};
+          if (
+            !Object.prototype.hasOwnProperty.call(
+              clusterClientOptions.redisOptions,
+              "tls"
+            )
+          ) {
+            clusterClientOptions.redisOptions.tls = {};
+          }
+        }
+
+        return new Redis.Cluster(startupNodes, clusterClientOptions);
+      }
+      return new Redis.Cluster(clusterOptions);
+    }
+
     try {
       if (config.cluster) {
-        connections[id] = new Redis.Cluster(options);
+        connections[id] = buildClusterClient(options);
       } else {
         connections[id] = new Redis(options);
       }

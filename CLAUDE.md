@@ -6,6 +6,7 @@ The package registers one Node-RED module entrypoint in `package.json` and is im
 ## Project purpose
 
 The package provides Redis integration nodes for:
+
 - shared configuration
 - blocking and event-style input
 - output/write commands
@@ -18,6 +19,7 @@ Treat this codebase as a Node-RED node package first, not as a generic Redis SDK
 ## Read this first
 
 When starting work, read in this order:
+
 1. `docs/REFERENCE_MAP.md`
 2. `docs/ARCHITECTURE.md`
 3. `docs/NODE_GUIDE.md`
@@ -25,12 +27,14 @@ When starting work, read in this order:
 5. `docs/TESTING.md`
 
 For Lua/library-related changes, also read:
+
 - `test/redis_lua_ui_spec.js`
 - the `redis-lua-script` section in `docs/NODE_GUIDE.md`
 
 ## Source map
 
 Primary files:
+
 - `package.json` — npm metadata, scripts, dependency versions, Node-RED registration
 - `redis.js` — all runtime node implementations and connection lifecycle logic
 - `redis.html` — all editor UI, help text, command lists, and validation
@@ -44,6 +48,7 @@ The runtime is implemented as one CommonJS Node-RED module exported from `redis.
 Keep that deployment model unless a human explicitly approves a structural split.
 
 Current runtime node types:
+
 - `redis-config`
 - `redis-in`
 - `redis-out`
@@ -52,6 +57,7 @@ Current runtime node types:
 - `redis-instance`
 
 Connection management is shared and stateful:
+
 - `connections` and `usedConn` are module-level registries
 - some nodes intentionally share connections
 - blocking or subscriber-style flows intentionally use dedicated connections
@@ -68,6 +74,7 @@ Do not rename public node types, config fields, message fields, or editor ids un
 Keep existing flow JSON compatibility wherever possible.
 
 Safe default approach:
+
 1. locate the exact node type and code path
 2. read the matching tests
 3. add or update the narrowest test that proves the change
@@ -78,6 +85,7 @@ Safe default approach:
 ## Coding conventions
 
 Follow the repository formatter, not personal preference:
+
 - semicolons on
 - double quotes
 - trailing commas `es5`
@@ -85,6 +93,7 @@ Follow the repository formatter, not personal preference:
 - space width 2
 
 Use modern JavaScript, but keep compatibility with the current code style:
+
 - CommonJS module format
 - `function` for Node-RED constructors
 - `let`/`const` inside runtime logic
@@ -99,6 +108,7 @@ Input handlers should preserve `msg` and use `send`/`done` correctly.
 Close handlers must clean up listeners, clear status, and release Redis connections.
 
 Editor changes must preserve:
+
 - property names in `defaults`
 - typedInput wiring and hidden type fields
 - help text consistency
@@ -109,6 +119,7 @@ Editor changes must preserve:
 
 Assume Redis connections are long-lived and failure-prone.
 Always think about:
+
 - ready/error/reconnecting/end states
 - subscriber mode restrictions
 - blocking command shutdown
@@ -121,17 +132,20 @@ Prefer existing ioredis usage patterns already present in this branch before int
 
 ## Testing expectations
 
-A real Redis server on `127.0.0.1:6379` is required for the current test suite.
 Run:
+
 - `npm test`
 
-Redis is expected to already be installed locally; if it is not installed at all, ask the
-human to install it rather than installing the server yourself. On this development machine
-you may otherwise change Redis when a test needs it (config, ACL, version), but capture the
-original state first and restore it exactly afterward so results stay reproducible. See
-`docs/TESTING.md` for the full environment boundary.
+`npm test` owns Redis through Docker: it checks Docker, starts one deployment at a time,
+runs the matching Mocha specs, and tears the deployment down with volumes. It can fall back
+to `sudo -n docker` when Docker was just installed and group membership has not refreshed. Use
+`npm run test:mocha -- <spec>` only for targeted iteration when you have already started a
+compatible Redis yourself. MemoryDB tests are opt-in through environment variables only;
+never commit MemoryDB endpoints or credentials. See `docs/TESTING.md` for the full
+environment boundary.
 
 Before committing, also account for:
+
 - Husky pre-commit calling `npm test`
 - lint-staged formatting staged files with Prettier
 
@@ -140,6 +154,7 @@ If you change behavior, update or add tests in the matching spec file instead of
 ## Documentation expectations
 
 When user-visible behavior changes:
+
 - update the relevant help text in `redis.html`
 - update or add an example flow if it improves discoverability
 - update the matching document under `docs/`
@@ -152,6 +167,7 @@ The detailed procedures belong in `docs/`, while this file should stay high-sign
 ## Known caution areas
 
 Read the matching code and tests before touching:
+
 - connection sharing keys
 - shutdown and `quit()`/`disconnect()` behavior
 - `redis-in` blocking loops
@@ -165,6 +181,7 @@ Read the matching code and tests before touching:
 ## Output quality bar
 
 Any proposed change should be:
+
 - minimal
 - branch-specific
 - test-backed

@@ -4,6 +4,7 @@
 
 This is a Node-RED custom node package.
 The main implementation lives in:
+
 - `redis.js`
 - `redis.html`
 
@@ -20,6 +21,7 @@ This repository also exposes `.codex/skills/node-red-contrib-redis-maintainer/SK
 ## Essential startup checklist
 
 Before editing:
+
 1. Read `docs/REFERENCE_MAP.md`.
 2. Read the node-specific section in `docs/NODE_GUIDE.md`.
 3. Read the matching tests for the behavior you plan to change.
@@ -33,12 +35,19 @@ Create test case to reproduce bug before apply patch and re-run test to confirm 
 ## Commands
 
 Install dependencies:
+
 ```bash
 npm install
 ```
 
-Run the test suite (requires a live Redis on `127.0.0.1:6379`):
+Run the Docker-managed deployment test suite:
+
 ```bash
 npm test
 ```
 
+Run a targeted Mocha spec only when you have already started a compatible Redis yourself:
+
+```bash
+npm run test:mocha -- test/redis_in_spec.js
+```

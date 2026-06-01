@@ -1,94 +1,153 @@
 # Testing
 
-This repository uses Mocha with `node-red-node-test-helper`, but the tests also require a real Redis server.
+This repository uses Mocha with `node-red-node-test-helper`. `npm test` now manages
+Redis deployments with Docker so the suite can verify unauthenticated standalone,
+authenticated standalone, Redis Cluster, Redis Sentinel, and optional AWS MemoryDB behavior.
 
 ## Prerequisite
 
-Start Redis locally on:
-- host: `127.0.0.1`
-- port: `6379`
+Docker Engine with the Compose plugin must be usable by the current user, or via
+passwordless `sudo -n docker`.
 
-The current specs and cleanup helper assume that address directly.
+`npm test` runs `scripts/ensure-docker-ubuntu.sh` first. On Ubuntu 22.04, 24.04, or
+26.04 it checks for `docker` and `docker compose`; if either is missing, it installs Docker
+Engine using Docker's official apt repository flow. Installation may prompt for `sudo`.
+If Docker is installed but the current shell has not picked up docker-group membership yet,
+the runner falls back to `sudo -n docker` when available. On non-Ubuntu hosts, install
+Docker yourself before running the suite.
 
-Redis is expected to be installed and available locally already. If it is **not installed
-at all**, stop and ask the human to install it — do not install the server package
-yourself.
-
-The suite does not start or stop Redis for you, and it writes/reads real keys. The
-`test/helpers/cleanup.js` helper deletes only keys matching a given pattern, so tests are
-responsible for namespacing and cleaning their own keys.
-
-## Agent boundary — system/service changes are allowed *if restored*
-
-This is a development machine with no production data, so for testing purposes an agent
-**may** make system or service changes when a test genuinely needs them: installing,
-uninstalling, upgrading, or downgrading Redis; editing `redis.conf`; changing runtime
-config (`CONFIG SET`); modifying ACLs; etc. There is no risk in doing so.
-
-The hard requirement is **reversibility**:
-
-- Before changing anything, capture the original state (e.g. record the current
-  `redis.conf`, `CONFIG GET` values, ACL list, installed version).
-- After the test, **restore that original state exactly** so the environment — and the
-  test result — is reproducible. Leave the machine as you found it.
-- Never leave Redis stopped, reconfigured, flushed, or on a different version once your
-  work is done.
-
-The one exception to "you may change it" is initial provisioning: if Redis is not installed
-at all, ask the human to install it rather than installing the server yourself.
+Do not start a separate Redis on the test ports while running `npm test`; the runner owns
+one local deployment at a time and tears it down with volumes before continuing.
 
 ## Main command
 
-Run all tests:
+Run all deployment tests:
+
 ```bash
 npm test
 ```
 
-This runs `mocha "test/**/*_spec.js"`. Husky also runs `npm test` on pre-commit, and
-lint-staged formats staged files with Prettier — so a failing suite (or a Redis that is not
-running) will block your commit.
+The runner executes these deployments sequentially:
 
-To run a single spec while iterating:
+- `single-noauth`: Redis 8.8+ image on `127.0.0.1:6379`; standalone Mocha specs.
+- `single-auth`: Redis 8.8+ image on `127.0.0.1:6379` with ACL username/password; standalone Mocha specs.
+- `cluster-auth`: Redis 7.2 image, two authenticated Cluster masters with all slots assigned; topology specs plus Redis 7.2-supported cluster-prone command coverage.
+- `sentinel-auth`: Redis 7.2 image, three authenticated Redis data nodes plus three Sentinel processes; topology specs plus Redis 7.2-supported cluster-prone command coverage.
+- `memorydb`: optional AWS MemoryDB topology specs when `MEMORYDB_ENABLED=1`.
+
+The raw Mocha command is still available for targeted iteration when you have already
+started a compatible Redis yourself:
+
 ```bash
-npx mocha test/redis_in_spec.js
+npm run test:mocha -- test/redis_in_spec.js
 ```
+
+To run the raw full Mocha glob against a Redis you started yourself:
+
+```bash
+npm run test:mocha:all
+```
+
+The raw full glob includes topology specs outside their matching deployment, so Mocha may
+report them as pending. `npm test` excludes those topology specs from standalone runs and
+executes them only in their own deployment stage.
+
+Standalone specs read connection details from:
+
+- `REDIS_HOST`
+- `REDIS_PORT`
+- `REDIS_USERNAME`
+- `REDIS_PASSWORD`
+
+The Docker runner sets these automatically for local deployments.
+
+## AWS MemoryDB
+
+MemoryDB tests are opt-in and use environment variables only. Do not commit MemoryDB
+endpoints or credentials.
+
+Required variables:
+
+```bash
+export MEMORYDB_ENABLED=1
+export MEMORYDB_ENDPOINT="clustercfg.example.memorydb.region.amazonaws.com"
+export MEMORYDB_PORT="6379"
+export MEMORYDB_USERNAME="..."
+export MEMORYDB_PASSWORD="..."
+```
+
+The MemoryDB `redis-config` simulation uses cluster mode with a single startup node:
+
+```json
+[
+  {
+    "dnsLookupStrategy": "identity",
+    "host": "$MEMORYDB_ENDPOINT",
+    "port": 6379,
+    "username": "$MEMORYDB_USERNAME",
+    "password": "$MEMORYDB_PASSWORD"
+  }
+]
+```
+
+The runtime interprets `dnsLookupStrategy: "identity"` as ioredis identity DNS lookup with
+TLS enabled for the cluster connection.
 
 ## Test layout
 
-There are 17 spec files (~237 `it()` cases). Do not assume this list is exhaustive forever —
-confirm with `ls test/*_spec.js`.
+There are 21 spec files. Do not assume this list is exhaustive forever; confirm with
+`ls test/*_spec.js`.
 
 Node behavior and lifecycle:
+
 - `redis_in_spec.js` — `redis-in`: blocking pops, pub/sub, `xreadgroup`
 - `redis_out_spec.js` — `redis-out`: `xadd`/`zadd`/list payload shaping
 - `redis_command_spec.js` — `redis-command`: basic SET/GET/DEL round-trip
-- `redis_status_spec.js` — `node.status` and shutdown across **all** node types
-- `redis_lua_ui_spec.js` — Lua editor/library UI; **static HTML parse, needs no Redis**
+- `redis_status_spec.js` — `node.status` and shutdown across all node types
+- `redis_lua_conn_spec.js` — Lua connection isolation across config nodes
+- `redis_lua_ui_spec.js` — Lua editor/library UI; static HTML parse, needs no Redis
 
-Command-family coverage (all drive `redis-command` through `client.call`):
+Command-family coverage, all driving `redis-command` through `client.call`:
+
 - `bit_`, `geo_`, `hash_`, `hyperloglog_`, `key_`, `list_`, `scripting_`, `server_`,
   `set_`, `sorted_set_`, `stream_`, `string_commands_spec.js`
 
-Every spec except `redis_lua_ui_spec.js` requires a live Redis.
+Deployment topology coverage:
 
-## How the tests work (node-red-node-test-helper)
+- `redis_cluster_deployment_spec.js` — Redis Cluster auth, same-slot success, cross-slot failure, pub/sub, blocking list, Lua fallback, Redis 7.2 cluster-prone commands
+- `redis_sentinel_deployment_spec.js` — Sentinel discovery/auth, pub/sub, blocking list, Lua, failover/reconnect, Redis 7.2 cluster-prone commands
+- `memorydb_deployment_spec.js` — opt-in AWS MemoryDB cluster/auth/same-slot/cross-slot/Lua and Redis 7.2 cluster-prone command coverage
 
-The behavioral specs follow one pattern:
+Helpers:
 
-1. `helper.load(redisNode, flow, cb)` — boot a flow made of plain JS objects, including a
+- `test/helpers/deployment.js` — active standalone Redis config and direct clients
+- `test/helpers/cleanup.js` — pattern cleanup for standalone deployments
+- `test/helpers/topology.js` — Node-RED flow invocation helpers for topology specs
+- `test/helpers/cluster-prone.js` — shared same-slot and cross-slot Redis 7.2 command matrix for Cluster, Sentinel, and MemoryDB
+
+## How the tests work
+
+Behavioral specs follow one pattern:
+
+1. `helper.load(redisNode, flow, cb)` boots a flow made of plain JS objects, including a
    `redis-config` node and `helper` sink nodes.
-2. `helper.getNode(id)` — grab a node instance.
-3. drive it: `node.receive(msg)` to send input; `helper.getNode("sink").on("input", ...)`
-   to assert on what came out.
-4. assert inside the handler, calling Mocha's `done()` / `done(err)`.
-5. clean up Redis keys (see `helpers/cleanup.js`) in `afterEach`.
+2. `helper.getNode(id)` grabs a node instance.
+3. Tests drive it with `node.receive(msg)` and assert messages from helper sink nodes.
+4. `afterEach` unloads Node-RED, then deletes namespaced Redis keys.
 
-`redis_lua_ui_spec.js` is different: it reads `redis.html` as text and asserts on the
-`RED.library.create(...)` block (library `type`, `ext`, and the `stored`/`block` checkbox
-get/set fields). It guards regressions in the editor template, not the runtime.
+All test keys must be namespaced and explicitly cleaned. Do not use shared-test `FLUSHDB`.
+`SCRIPT FLUSH` is acceptable only when a test is specifically exercising script-cache
+reload behavior.
+
+Topology specs exercise Redis 7.2-supported commands that are easy to misuse in sharded
+or discovered deployments: multi-key string/key commands, set and sorted-set algebra,
+HyperLogLog merges, multi-stream reads, multi-key blocking pops, transactions, Lua
+scripts, `KEYS`/`SCAN`/`DBSIZE`, and `SELECT`. Cluster and MemoryDB assert both hash-tagged
+same-slot success and deliberate cross-slot failures; Sentinel asserts the same command
+surface against the discovered primary.
 
 ## Regression strategy
 
-When you change behavior, add or adjust the narrowest test in the matching spec that fails
-before your change and passes after. Prefer extending an existing spec over creating a new
-file; if you do add a file, update the spec lists in `REFERENCE_MAP.md` and the skill file.
+When behavior changes, add or adjust the narrowest test in the matching spec that fails
+before the change and passes after. Prefer extending an existing spec. If you add, rename,
+or remove a spec file, update `REFERENCE_MAP.md`, this file, and the maintainer skill file.

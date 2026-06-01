@@ -1025,7 +1025,8 @@ This configuration node is shared by all redis nodes that reference it.</p>
         Manual cluster seed nodes can define their own <code>username</code>,
         <code>password</code>, <code>port</code>, and <code>tls</code> values.
         AWS MemoryDB or ElastiCache cluster configuration endpoints are saved as a single
-        startup node in that same array.
+        startup node in that same array with <code>dnsLookupStrategy: "identity"</code>,
+        which enables identity DNS lookup and TLS at runtime.
     </dd>
 </dl>
 </script>

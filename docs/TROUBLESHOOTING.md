@@ -3,19 +3,22 @@
 Use this guide when tests fail, Redis behavior looks inconsistent, or a node works in the
 editor but not at runtime.
 
-## Redis Is Not Running
+## Docker Or Redis Deployment Is Not Running
 
-Most tests require a real Redis server on:
-
-- host: `127.0.0.1`
-- port: `6379`
+`npm test` starts Redis deployments through Docker Compose. Most connection failures now
+mean Docker is unavailable, a test port is already in use, or the deployment did not become
+ready before the timeout.
 
 Symptoms:
+
 - connection refused
+- Docker permission errors
+- port allocation errors on `6379`, `7000`, `7001`, or Sentinel ports
 - status tests stay red
 - most specs fail quickly
 
-Check Redis outside the test suite before debugging node code.
+Check `docker info` or `sudo -n docker info`, and confirm no separate Redis process is
+bound to the runner ports before debugging node code.
 
 ## Redis Version Mismatch
 
@@ -23,11 +26,13 @@ The test suite covers modern Redis commands, including streams, newer sorted-set
 commands, Lua scripting, and newer hash commands.
 
 Symptoms:
+
 - `ERR unknown command`
 - command-family specs fail while basic `SET` / `GET` still work
 - failures are clustered in one command family spec
 
-First confirm the Redis server version supports the command under test.
+First confirm the deployment under test uses the expected image. Standalone full-suite
+deployments use Redis 8.8+; Cluster and Sentinel topology deployments use Redis 7.2.
 
 ## Stale Test Keys
 
@@ -35,6 +40,7 @@ Tests use real Redis keys. Most specs clean namespaced keys in `afterEach`, but 
 interrupted run can leave keys behind.
 
 Symptoms:
+
 - expected empty list/set/hash is not empty
 - consumer group already exists
 - command returns unexpected previous data
@@ -47,6 +53,7 @@ intentionally want to remove everything in the local test Redis.
 `redis-in` with `xreadgroup` expects the consumer group to already exist.
 
 Symptoms:
+
 - warning about `NOGROUP`
 - no stream messages are emitted
 
@@ -76,6 +83,7 @@ Pub/sub tests and flows can miss messages if the publisher sends before the subs
 fully subscribed.
 
 Symptoms:
+
 - intermittent pub/sub test timeouts
 - publish command succeeds but subscriber receives nothing
 
@@ -87,6 +95,7 @@ Delay publishing until the subscriber node is loaded and connected. Existing tes
 Blocking commands can occupy a Redis connection.
 
 Examples:
+
 - `BLPOP`
 - `BRPOP`
 - `BZPOPMIN`
@@ -101,6 +110,7 @@ behavior: blocking `redis-in` intentionally force-disconnects instead of sending
 Lua editor/library behavior is guarded by `test/redis_lua_ui_spec.js`.
 
 Symptoms:
+
 - Open/Save Library button does not work
 - stored/block checkbox values are lost
 - Lua files save with the wrong extension
@@ -117,6 +127,7 @@ Check that `RED.library.create(...)` still uses:
 Tests use `node-red-node-test-helper`.
 
 Common pattern:
+
 1. `helper.startServer(...)`
 2. `helper.load(redisNode, flow, callback)`
 3. `helper.getNode(id)`

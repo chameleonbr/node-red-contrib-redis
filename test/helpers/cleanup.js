@@ -1,11 +1,12 @@
 const Redis = require("ioredis");
+const { redisOptions } = require("./deployment");
 
 /**
  * Deletes all Redis keys matching the given pattern.
  * Safe: only keys matching the pattern are removed; nothing else is touched.
  */
 function cleanupKeys(pattern, done) {
-  const client = new Redis({ host: "127.0.0.1", port: 6379 });
+  const client = new Redis(redisOptions());
   client
     .keys(pattern)
     .then((keys) => {

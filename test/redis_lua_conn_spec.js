@@ -17,15 +17,15 @@
 
 var helper = require("node-red-node-test-helper");
 var redisNode = require("../redis.js");
-var Redis = require("ioredis");
+var deployment = require("./helpers/deployment");
 
 helper.init(require.resolve("node-red"));
 
 var TEST_KEY = "lua:conntest:key";
 
 function delKeyInBothDbs() {
-  var c0 = new Redis({ host: "127.0.0.1", port: 6379, db: 0 });
-  var c1 = new Redis({ host: "127.0.0.1", port: 6379, db: 1 });
+  var c0 = deployment.directRedis({ db: 0 });
+  var c1 = deployment.directRedis({ db: 1 });
   return Promise.all([c0.del(TEST_KEY), c1.del(TEST_KEY)]).then(function () {
     c0.disconnect();
     c1.disconnect();
@@ -44,31 +44,20 @@ describe("redis-lua-script connection isolation", function () {
   });
 
   afterEach(function (done) {
-    helper.unload().then(function () {
-      return delKeyInBothDbs();
-    }).then(function () {
-      helper.stopServer(done);
-    });
+    helper
+      .unload()
+      .then(function () {
+        return delKeyInBothDbs();
+      })
+      .then(function () {
+        helper.stopServer(done);
+      });
   });
 
   it("routes a non-blocking lua node to its own config's DB (not a shared pooled client)", function (done) {
     var flow = [
-      {
-        id: "cfg-db0",
-        type: "redis-config",
-        name: "ConfigDb0",
-        options: '{"host":"127.0.0.1","port":6379,"db":0}',
-        optionsType: "json",
-        cluster: false,
-      },
-      {
-        id: "cfg-db1",
-        type: "redis-config",
-        name: "ConfigDb1",
-        options: '{"host":"127.0.0.1","port":6379,"db":1}',
-        optionsType: "json",
-        cluster: false,
-      },
+      deployment.redisConfigNode("cfg-db0", "ConfigDb0", { db: 0 }),
+      deployment.redisConfigNode("cfg-db1", "ConfigDb1", { db: 1 }),
       // Constructed first: seeds the (buggy) connections[undefined] slot with a db-0 client.
       {
         id: "lua-db0",
@@ -103,8 +92,8 @@ describe("redis-lua-script connection isolation", function () {
 
       sink1.on("input", function () {
         // The script ran. Now check which DB actually received the write.
-        var probe1 = new Redis({ host: "127.0.0.1", port: 6379, db: 1 });
-        var probe0 = new Redis({ host: "127.0.0.1", port: 6379, db: 0 });
+        var probe1 = deployment.directRedis({ db: 1 });
+        var probe0 = deployment.directRedis({ db: 0 });
         Promise.all([probe1.get(TEST_KEY), probe0.get(TEST_KEY)])
           .then(function (res) {
             var inDb1 = res[0];

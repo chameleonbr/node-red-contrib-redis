@@ -1,0 +1,15 @@
+services:
+  redis:
+    image: ${REDIS_STANDALONE_IMAGE:-redis:8.8-alpine}
+    command:
+      - redis-server
+      - --bind
+      - 0.0.0.0
+      - --protected-mode
+      - "no"
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+    ports:
+      - "127.0.0.1:6379:6379"

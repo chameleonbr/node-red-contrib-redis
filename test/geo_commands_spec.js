@@ -1,20 +1,14 @@
 const helper = require("node-red-node-test-helper");
 const redisNode = require("../redis.js");
 const { cleanupKeys } = require("./helpers/cleanup");
+const { redisConfigNode } = require("./helpers/deployment");
 
 helper.init(require.resolve("node-red"));
 
 describe("Geo commands", function () {
   this.timeout(5000);
 
-  const configNode = {
-    id: "config1",
-    type: "redis-config",
-    name: "Local",
-    options: '{"host":"127.0.0.1","port":6379}',
-    optionsType: "json",
-    cluster: false,
-  };
+  const configNode = redisConfigNode("config1", "Local");
 
   beforeEach((done) => {
     helper.startServer(done);

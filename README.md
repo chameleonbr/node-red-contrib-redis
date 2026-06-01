@@ -17,6 +17,26 @@ Please test and make feedback.
 
 I need contributors...
 
+## Testing
+
+Run the full deployment matrix with Docker:
+
+```bash
+npm test
+```
+
+The test runner starts one Redis deployment at a time, runs the matching Mocha specs, and
+tears the deployment down before continuing. It covers standalone no-auth/auth Redis 8.8+,
+Redis Cluster auth on Redis 7.2, Redis Sentinel auth/failover on Redis 7.2, and optional
+AWS MemoryDB tests when `MEMORYDB_ENABLED=1` plus MemoryDB endpoint credentials are present
+in the environment. Secrets are read from environment variables only.
+
+For targeted iteration against a Redis you started yourself:
+
+```bash
+npm run test:mocha -- test/redis_in_spec.js
+```
+
 
 
 Redis Commands:

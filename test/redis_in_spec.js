@@ -1,22 +1,15 @@
 "use strict";
 const helper = require("node-red-node-test-helper");
 const redisNode = require("../redis.js");
-const Redis = require("ioredis");
 const { cleanupKeys } = require("./helpers/cleanup");
+const { directRedis, redisConfigNode } = require("./helpers/deployment");
 
 helper.init(require.resolve("node-red"));
 
-const CONFIG = {
-    id: "config1",
-    type: "redis-config",
-    name: "Local",
-    options: '{"host":"127.0.0.1","port":6379}',
-    optionsType: "json",
-    cluster: false,
-};
+const CONFIG = redisConfigNode("config1", "Local");
 
 function direct() {
-    return new Redis({ host: "127.0.0.1", port: 6379 });
+    return directRedis();
 }
 
 function makeInFlow(command, topic, obj, extra = {}) {
