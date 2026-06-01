@@ -5,6 +5,7 @@ module.exports = function (RED) {
   let usedConn = {};
 
   const GRACEFUL_QUIT_TIMEOUT_MS = 2000;
+  const TEST_CONNECTION_TIMEOUT_MS = 10000;
 
   // Attaches ioredis connection-event listeners to drive node.status.
   // Returns a cleanup function that removes all attached listeners.
@@ -57,6 +58,299 @@ module.exports = function (RED) {
     };
   }
 
+  function setDefault(target, key, value) {
+    if (!Object.prototype.hasOwnProperty.call(target, key)) {
+      target[key] = value;
+    }
+    return target;
+  }
+
+  function redactValue(value) {
+    if (Array.isArray(value)) {
+      return value.map(redactValue);
+    }
+    if (value && typeof value === "object") {
+      var copy = {};
+      Object.keys(value).forEach(function (key) {
+        if (/password|pass|secret|token|auth/i.test(key)) {
+          copy[key] = "[redacted]";
+        } else if (
+          key === "args" &&
+          value.name &&
+          /^(auth|hello)$/i.test(String(value.name))
+        ) {
+          copy[key] = value[key].map(function () {
+            return "[redacted]";
+          });
+        } else {
+          copy[key] = redactValue(value[key]);
+        }
+      });
+      return copy;
+    }
+    return value;
+  }
+
+  function safeStringify(value) {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch (e) {
+      return String(value);
+    }
+  }
+
+  function serializeError(err) {
+    var out = {
+      name: err && err.name,
+      message: err && err.message,
+      stack: err && err.stack,
+    };
+    Object.getOwnPropertyNames(err || {}).forEach(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(out, key)) {
+        out[key] = err[key];
+      }
+    });
+    return redactValue(out);
+  }
+
+  function addVerboseLog(log, message, data) {
+    var entry = {
+      at: new Date().toISOString(),
+      message: message,
+    };
+    if (data !== undefined) {
+      entry.data = data;
+    }
+    log.push(entry);
+  }
+
+  function withTimeout(promise, label) {
+    var timer;
+    return Promise.race([
+      promise,
+      new Promise(function (_resolve, reject) {
+        timer = setTimeout(function () {
+          reject(new Error(label + " timed out after " + TEST_CONNECTION_TIMEOUT_MS + "ms"));
+        }, TEST_CONNECTION_TIMEOUT_MS);
+      }),
+    ]).finally(function () {
+      clearTimeout(timer);
+    });
+  }
+
+  function buildClusterClient(clusterOptions, clientOptions) {
+    if (Array.isArray(clusterOptions)) {
+      var identityNode = clusterOptions.find(function (nodeOptions) {
+        return nodeOptions && nodeOptions.dnsLookupStrategy === "identity";
+      });
+      var authNode = clusterOptions.find(function (nodeOptions) {
+        return (
+          nodeOptions &&
+          (nodeOptions.username ||
+            nodeOptions.password ||
+            Object.prototype.hasOwnProperty.call(nodeOptions, "tls"))
+        );
+      });
+      var startupNodes = clusterOptions.map(function (nodeOptions) {
+        var startupNode = Object.assign({}, nodeOptions);
+        delete startupNode.dnsLookupStrategy;
+        return startupNode;
+      });
+
+      var clusterClientOptions = Object.assign({}, clientOptions || {});
+      if (authNode) {
+        clusterClientOptions.redisOptions = Object.assign(
+          {},
+          clusterClientOptions.redisOptions || {}
+        );
+        if (authNode.username) {
+          clusterClientOptions.redisOptions.username = authNode.username;
+        }
+        if (authNode.password) {
+          clusterClientOptions.redisOptions.password = authNode.password;
+        }
+        if (Object.prototype.hasOwnProperty.call(authNode, "tls")) {
+          clusterClientOptions.redisOptions.tls =
+            authNode.tls === true ? {} : authNode.tls;
+        }
+      }
+
+      if (identityNode) {
+        clusterClientOptions.dnsLookup = function (address, callback) {
+          callback(null, address);
+        };
+        clusterClientOptions.redisOptions =
+          clusterClientOptions.redisOptions || {};
+        if (
+          !Object.prototype.hasOwnProperty.call(
+            clusterClientOptions.redisOptions,
+            "tls"
+          )
+        ) {
+          clusterClientOptions.redisOptions.tls = {};
+        }
+      }
+
+      return new Redis.Cluster(startupNodes, clusterClientOptions);
+    }
+    if (clientOptions) {
+      return new Redis.Cluster(clusterOptions, clientOptions);
+    }
+    return new Redis.Cluster(clusterOptions);
+  }
+
+  function buildRedisClient(options, cluster) {
+    if (cluster) {
+      return buildClusterClient(options);
+    }
+    return new Redis(options);
+  }
+
+  function testRedisOptions(base) {
+    var options = Object.assign({}, base || {});
+    setDefault(options, "connectTimeout", 5000);
+    setDefault(options, "maxRetriesPerRequest", 1);
+    setDefault(options, "retryStrategy", null);
+    setDefault(options, "showFriendlyErrorStack", true);
+    setDefault(options, "lazyConnect", true);
+    return options;
+  }
+
+  function buildTestRedisClient(options, cluster) {
+    var redisOptions = testRedisOptions({});
+    if (cluster) {
+      return buildClusterClient(options, {
+        lazyConnect: true,
+        slotsRefreshTimeout: 5000,
+        redisOptions: redisOptions,
+      });
+    }
+    if (typeof options === "string") {
+      return new Redis(options, redisOptions);
+    }
+    return new Redis(testRedisOptions(options));
+  }
+
+  function attachVerboseRedisLogs(client, log) {
+    var listeners = {};
+    ["wait", "connecting", "connect", "ready", "close", "reconnecting", "end"].forEach(
+      function (eventName) {
+        listeners[eventName] = function (value) {
+          addVerboseLog(log, "redis event: " + eventName, value);
+        };
+        client.on(eventName, listeners[eventName]);
+      }
+    );
+    listeners.error = function (err) {
+      addVerboseLog(log, "redis event: error", serializeError(err));
+    };
+    client.on("error", listeners.error);
+    return function () {
+      Object.keys(listeners).forEach(function (eventName) {
+        client.removeListener(eventName, listeners[eventName]);
+      });
+    };
+  }
+
+  function evaluateConnectionTestOptions(value, valueType) {
+    if (valueType === "env") {
+      var envValue = process.env[value];
+      if (envValue === undefined) {
+        var envError = new Error("Environment variable " + value + " is not set");
+        envError.statusCode = 400;
+        throw envError;
+      }
+      value = envValue;
+    }
+    if (typeof value === "string") {
+      try {
+        return JSON.parse(value);
+      } catch (e) {
+        if (valueType === "env") {
+          return value;
+        }
+        e.statusCode = 400;
+        e.message = "Invalid Redis connection JSON: " + e.message;
+        throw e;
+      }
+    }
+    return value;
+  }
+
+  async function testRedisConnection(options, cluster) {
+    var log = [];
+    var started = Date.now();
+    var client;
+    var removeVerboseLogs = function () {};
+    var quitCompleted = false;
+    try {
+      addVerboseLog(log, "creating temporary Redis client", {
+        cluster: !!cluster,
+        options: redactValue(options),
+      });
+      client = buildTestRedisClient(options, cluster);
+      removeVerboseLogs = attachVerboseRedisLogs(client, log);
+      if (client.status !== "ready") {
+        addVerboseLog(log, "connecting");
+        await withTimeout(client.connect(), "Redis connection");
+      }
+      addVerboseLog(log, "sending PING");
+      var response = await withTimeout(client.ping(), "Redis PING");
+      addVerboseLog(log, "received PING response", response);
+      if (response !== "PONG") {
+        throw new Error("Expected PONG from Redis PING, got " + response);
+      }
+      addVerboseLog(log, "disconnecting with QUIT");
+      await gracefulQuit(client);
+      quitCompleted = true;
+      addVerboseLog(log, "graceful disconnect complete");
+      return {
+        success: true,
+        response: response,
+        message: "Connection test passed: PING -> " + response,
+        durationMs: Date.now() - started,
+        log: log,
+      };
+    } catch (err) {
+      addVerboseLog(log, "connection test failed", serializeError(err));
+      err.connectionTestLog = log;
+      err.connectionTestOptions = redactValue(options);
+      throw err;
+    } finally {
+      if (client && !quitCompleted) {
+        try {
+          addVerboseLog(log, "disconnecting after failed test");
+          await gracefulQuit(client);
+          addVerboseLog(log, "disconnect after failed test complete");
+        } catch (e) {
+          addVerboseLog(log, "disconnect after failed test failed", serializeError(e));
+          try { client.disconnect(); } catch (_) {}
+        }
+      }
+      removeVerboseLogs();
+    }
+  }
+
+  function logConnectionTestError(node, payload) {
+    var text = [
+      "redis-config test connection failed",
+      "message: " + payload.message,
+      "options: " + safeStringify(payload.options),
+      "log: " + safeStringify(payload.log),
+      "error: " + safeStringify(payload.error),
+    ].join("\n");
+    console.error(text);
+    if (RED.log && typeof RED.log.error === "function") {
+      RED.log.error(text);
+    }
+    if (node && typeof node.error === "function") {
+      node.error(text, {
+        topic: "redis-config test connection",
+        payload: payload,
+      });
+    }
+  }
+
 function RedisConfig(n) {
     RED.nodes.createNode(this, n);
     this.name = n.name;
@@ -82,6 +376,33 @@ function RedisConfig(n) {
     }
   }
   RED.nodes.registerType("redis-config", RedisConfig);
+
+  RED.httpAdmin.post(
+    "/redis-config/test",
+    RED.auth.needsPermission("redis-config.write"),
+    async function (req, res) {
+      var body = req.body || {};
+      var node = body.id ? RED.nodes.getNode(body.id) : null;
+      try {
+        var options = evaluateConnectionTestOptions(body.options, body.optionsType);
+        var result = await testRedisConnection(options, body.cluster === true || body.cluster === "true");
+        res.json(result);
+      } catch (err) {
+        var statusCode = err.statusCode || 500;
+        var payload = {
+          success: false,
+          message: "Connection test failed: " + (err.message || String(err)),
+          error: serializeError(err),
+          options: err.connectionTestOptions || redactValue(body.options),
+          log: err.connectionTestLog || [],
+        };
+        if (statusCode >= 500) {
+          logConnectionTestError(node, payload);
+        }
+        res.status(statusCode).json(payload);
+      }
+    }
+  );
 
   function RedisIn(n) {
     RED.nodes.createNode(this, n);
@@ -536,67 +857,8 @@ function RedisConfig(n) {
         null
       );
     }
-    function buildClusterClient(clusterOptions) {
-      if (Array.isArray(clusterOptions)) {
-        var identityNode = clusterOptions.find(function (nodeOptions) {
-          return nodeOptions && nodeOptions.dnsLookupStrategy === "identity";
-        });
-        var authNode = clusterOptions.find(function (nodeOptions) {
-          return (
-            nodeOptions &&
-            (nodeOptions.username ||
-              nodeOptions.password ||
-              Object.prototype.hasOwnProperty.call(nodeOptions, "tls"))
-          );
-        });
-        var startupNodes = clusterOptions.map(function (nodeOptions) {
-          var startupNode = Object.assign({}, nodeOptions);
-          delete startupNode.dnsLookupStrategy;
-          return startupNode;
-        });
-
-        var clusterClientOptions = {};
-        if (authNode) {
-          clusterClientOptions.redisOptions = {};
-          if (authNode.username) {
-            clusterClientOptions.redisOptions.username = authNode.username;
-          }
-          if (authNode.password) {
-            clusterClientOptions.redisOptions.password = authNode.password;
-          }
-          if (Object.prototype.hasOwnProperty.call(authNode, "tls")) {
-            clusterClientOptions.redisOptions.tls =
-              authNode.tls === true ? {} : authNode.tls;
-          }
-        }
-
-        if (identityNode) {
-          clusterClientOptions.dnsLookup = function (address, callback) {
-            callback(null, address);
-          };
-          clusterClientOptions.redisOptions =
-            clusterClientOptions.redisOptions || {};
-          if (
-            !Object.prototype.hasOwnProperty.call(
-              clusterClientOptions.redisOptions,
-              "tls"
-            )
-          ) {
-            clusterClientOptions.redisOptions.tls = {};
-          }
-        }
-
-        return new Redis.Cluster(startupNodes, clusterClientOptions);
-      }
-      return new Redis.Cluster(clusterOptions);
-    }
-
     try {
-      if (config.cluster) {
-        connections[id] = buildClusterClient(options);
-      } else {
-        connections[id] = new Redis(options);
-      }
+      connections[id] = buildRedisClient(options, config.cluster);
 
       connections[id].on("error", (e) => {
         config.error(e, null);

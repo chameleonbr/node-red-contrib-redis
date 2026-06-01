@@ -19,6 +19,9 @@ Key implementation points:
   `redisOptions` so discovered cluster nodes authenticate correctly
 - `dnsLookupStrategy: "identity"` on a cluster startup node enables identity DNS lookup
   and TLS for AWS MemoryDB/ElastiCache-style configuration endpoints
+- the editor Test connection button posts the current form values to a runtime admin
+  endpoint, creates a temporary client, connects, runs `PING`, expects `PONG`, and
+  disconnects with `QUIT` without adding the client to the shared connection pool
 
 Safe changes:
 

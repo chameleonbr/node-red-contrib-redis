@@ -1,4 +1,5 @@
 "use strict";
+const assert = require("assert");
 const helper = require("node-red-node-test-helper");
 const redisNode = require("../redis.js");
 const Redis = require("ioredis");
@@ -41,6 +42,77 @@ describe("node connection status", function () {
     beforeEach(function (done) { helper.startServer(done); });
     afterEach(function (done) {
         helper.unload().then(() => helper.stopServer(done));
+    });
+
+    describe("redis-config test connection endpoint", function () {
+        it("connects, pings, and gracefully disconnects with current JSON options", async function () {
+            let quitCalled = false;
+            const originalQuit = Redis.prototype.quit;
+            Redis.prototype.quit = async function () {
+                quitCalled = true;
+                return originalQuit.call(this);
+            };
+            try {
+                await helper.load(redisNode, [GOOD_CONFIG]);
+                const res = await helper
+                    .request()
+                    .post("/redis-config/test")
+                    .send({
+                        id: "cfg-good",
+                        cluster: false,
+                        optionsType: "json",
+                        options: GOOD_CONFIG.options,
+                    })
+                    .expect(200);
+
+                assert.strictEqual(res.body.success, true);
+                assert.strictEqual(res.body.response, "PONG");
+                assert.match(res.body.message, /PING -> PONG/);
+                assert.ok(Array.isArray(res.body.log), "verbose log should be returned");
+                assert.ok(quitCalled, "temporary test client should disconnect with QUIT");
+            } finally {
+                Redis.prototype.quit = originalQuit;
+            }
+        });
+
+        it("returns verbose errors and calls node.error when the test connection fails", async function () {
+            let consoleErrorCalled = false;
+            const originalConsoleError = console.error;
+            console.error = function () {
+                consoleErrorCalled = true;
+            };
+            await helper.load(redisNode, [BAD_CONFIG]);
+            const config = helper.getNode("cfg-bad");
+            let errorCall;
+            config.on("call:error", function (call) {
+                errorCall = call;
+            });
+
+            try {
+                const res = await helper
+                    .request()
+                    .post("/redis-config/test")
+                    .send({
+                        id: "cfg-bad",
+                        cluster: false,
+                        optionsType: "json",
+                        options: BAD_CONFIG.options,
+                    })
+                    .expect(500);
+
+                await new Promise((resolve) => setImmediate(resolve));
+
+                assert.strictEqual(res.body.success, false);
+                assert.match(res.body.message, /Connection test failed/);
+                assert.ok(res.body.error && res.body.error.message, "error details should be returned");
+                assert.ok(Array.isArray(res.body.log), "verbose log should be returned");
+                assert.ok(consoleErrorCalled, "full error should be logged to console");
+                assert.ok(errorCall, "config node should call node.error");
+                assert.match(String(errorCall.args[0]), /redis-config test connection failed/);
+            } finally {
+                console.error = originalConsoleError;
+            }
+        });
     });
 
     // ── redis-in ────────────────────────────────────────────────────────────

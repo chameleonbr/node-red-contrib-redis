@@ -165,6 +165,12 @@
         color: var(--red-ui-secondary-text-color, #666);
         text-align: right;
     }
+    .redis-config-test-message.redis-config-success {
+        color: var(--red-ui-form-input-success-color, #238823);
+    }
+    .redis-config-test-message.redis-config-error {
+        color: var(--red-ui-form-input-error-color, #c00);
+    }
     .redis-config-test-button {
         flex: 0 0 auto;
         order: 2;
@@ -710,8 +716,73 @@
                 }
             }
 
-            function showTestPlaceholder(target) {
-                $(target).text("Test hook is not implemented yet.");
+            function setTestMessage(target, state, text, detail) {
+                $(target)
+                    .removeClass("redis-config-success redis-config-error")
+                    .addClass(state ? "redis-config-" + state : "")
+                    .text(text || "")
+                    .attr("title", detail || "");
+            }
+
+            function buildConnectionTestPayload(target) {
+                var type = $("#redis-config-options-type").val() || "json";
+                var options;
+                if (type === "json") {
+                    syncConnectionToEditor();
+                    options = optionsEditor.getValue();
+                    try {
+                        JSON.parse(options || "{}");
+                    } catch (err) {
+                        setTestMessage(target, "error", "Invalid JSON: " + err.message);
+                        return null;
+                    }
+                    $("#node-config-input-options").val(options);
+                } else {
+                    options = $("#redis-config-options-raw").val();
+                    $("#node-config-input-options").val(options);
+                }
+                return {
+                    id: node.id,
+                    name: $("#node-config-input-name").val(),
+                    cluster: $("#redis-config-mode").val() === "cluster",
+                    optionsType: type,
+                    options: options
+                };
+            }
+
+            function runConnectionTest(target) {
+                var payload = buildConnectionTestPayload(target);
+                if (!payload) {
+                    return;
+                }
+                setTestMessage(target, "", "Testing...");
+                $.ajax({
+                    url: "redis-config/test",
+                    type: "POST",
+                    data: JSON.stringify(payload),
+                    contentType: "application/json; charset=utf-8",
+                    dataType: "json",
+                    success: function (result) {
+                        console.log("redis-config test connection result", result);
+                        setTestMessage(
+                            target,
+                            "success",
+                            (result.message || "Connection test passed") + " (" + result.durationMs + "ms)",
+                            JSON.stringify(result.log || [], null, 2)
+                        );
+                    },
+                    error: function (jqXHR, _textStatus, errorThrown) {
+                        var result = jqXHR.responseJSON || {};
+                        var message = result.message || errorThrown || "Connection test failed";
+                        console.error("redis-config test connection failed", result);
+                        setTestMessage(
+                            target,
+                            "error",
+                            message,
+                            JSON.stringify(result, null, 2)
+                        );
+                    }
+                });
             }
 
             function resizeConfigLayout() {
@@ -779,7 +850,7 @@
             optionsEditor.on("blur", syncEditorToForm);
             $(".redis-config-test-button").on("click", function(evt) {
                 evt.preventDefault();
-                showTestPlaceholder($(this).siblings(".redis-config-test-message"));
+                runConnectionTest($(this).siblings(".redis-config-test-message"));
             });
 
             setTimeout(function() {
@@ -1026,6 +1097,13 @@ MemoryDB/ElastiCache cluster endpoint, or Redis Sentinel.</p>
         Select <strong>Environment variable</strong> to store the name of an environment
         variable instead of literal JSON in the flow. At runtime, the environment value is
         parsed as JSON when possible; otherwise it is passed to ioredis as a plain value.
+    </dd>
+    <dt>Test connection</dt>
+    <dd>
+        Runs a full temporary connection cycle using the current form values: create the
+        Redis client, connect, send <code>PING</code>, expect <code>PONG</code>, then
+        disconnect with <code>QUIT</code>. The result is shown next to the button. Failures
+        are logged with verbose connection details in the runtime console and Debug sidebar.
     </dd>
     <dt>Common examples</dt>
     <dd>
