@@ -552,4 +552,36 @@ describe("redis-out node", function () {
             }, 200);
         });
     });
+
+    it("rpush — calls node.error when the Redis write fails (WRONGTYPE)", function (done) {
+        helper.load(redisNode, makeOutFlow("rpush", "test:out:err:wrongtype", false), function () {
+            const out = helper.getNode("out");
+            const c = direct();
+
+            let unhandled = null;
+            const onUnhandled = (reason) => { unhandled = reason; };
+            process.on("unhandledRejection", onUnhandled);
+
+            // Seed a STRING at the key so RPUSH fails with WRONGTYPE.
+            c.set("test:out:err:wrongtype", "i-am-a-string")
+                .then(() => {
+                    out.receive({ payload: "item" });
+                    setTimeout(() => {
+                        process.removeListener("unhandledRejection", onUnhandled);
+                        c.disconnect();
+                        try {
+                            out.error.callCount.should.be.above(0);
+                            String(out.error.firstCall.args[0]).should.match(/WRONGTYPE/);
+                            (unhandled === null).should.be.true();
+                            done();
+                        } catch (e) { done(e); }
+                    }, 200);
+                })
+                .catch((e) => {
+                    process.removeListener("unhandledRejection", onUnhandled);
+                    c.disconnect();
+                    done(e);
+                });
+        });
+    });
 });
