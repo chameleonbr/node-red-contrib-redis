@@ -579,7 +579,7 @@ function RedisConfig(n) {
       done();
     });
 
-    node.on("input", function (msg, send, done) {
+    node.on("input", async function (msg, send, done) {
       var topic;
       send = send || function() { node.send.apply(node,arguments) }
       done = done || function(err) { if(err)node.error(err, msg); }
@@ -602,22 +602,22 @@ function RedisConfig(n) {
             } else {
               fields = ['value', p != null ? String(p) : ''];
             }
-            client.xadd(topic, '*', ...fields);
+            await client.xadd(topic, '*', ...fields);
           } else if (node.command === 'zadd') {
             const p = msg.payload;
             if (p && typeof p === 'object' && !Array.isArray(p) && 'score' in p) {
               const member = node.obj ? JSON.stringify(p.member) : String(p.member);
-              client.zadd(topic, p.score, member);
+              await client.zadd(topic, p.score, member);
             } else if (Array.isArray(p)) {
-              client.zadd(topic, ...p);
+              await client.zadd(topic, ...p);
             } else {
               done(new Error("zadd requires payload {score, member} or [score, member, ...]"));
               return;
             }
           } else if (node.obj) {
-            client[node.command](topic, JSON.stringify(msg.payload));
+            await client[node.command](topic, JSON.stringify(msg.payload));
           } else {
-            client[node.command](topic, msg.payload);
+            await client[node.command](topic, msg.payload);
           }
           done();
         } catch (err) {

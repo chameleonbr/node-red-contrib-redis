@@ -98,6 +98,12 @@ Branch-specific payload shaping:
   - object members are JSON-stringified when `obj` is true
 - list push operations accept plain or JSON-stringified payloads depending on `obj`
 
+Error handling:
+
+- the write is awaited; `done()` resolves only after Redis acknowledges it
+- a failed write calls `done(err)`, so the message reaches a `catch` node and is marked errored
+- no write is fire-and-forget, so a failure cannot become an unhandled promise rejection
+
 Read before editing:
 
 - `../test/redis_out_spec.js`

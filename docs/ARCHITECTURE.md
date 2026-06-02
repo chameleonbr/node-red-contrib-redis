@@ -118,6 +118,8 @@ Implements focused write operations with custom payload shaping for selected com
 - stream add
 - sorted-set add
 
+The write is awaited and any failure is routed to `done(err)` so Catch nodes fire; no write is fire-and-forget.
+
 ### `redis-command`
 
 Implements generic command execution via `client.call(...)`.

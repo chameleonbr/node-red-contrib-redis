@@ -1485,6 +1485,9 @@ while logging a warning &mdash; create the group with <code>XGROUP CREATE</code>
 <script type="text/x-red" data-help-name="redis-out">
 <p>Receives a message and writes its payload to Redis using the selected command.
 The node has no output — it is a terminal node.</p>
+<p>The write is awaited: the message completes only after Redis acknowledges it, and any
+write failure (for example <code>WRONGTYPE</code> or a lost connection) is reported through
+the node&rsquo;s error path, so a <em>catch</em> node can handle it.</p>
 
 <h3>Inputs</h3>
 <dl class="message-properties">
