@@ -1,8 +1,9 @@
 # Testing
 
-This repository uses Mocha with `node-red-node-test-helper`. `npm test` now manages
-Redis deployments with Docker so the suite can verify unauthenticated standalone,
-authenticated standalone, Redis Cluster, Redis Sentinel, and optional AWS MemoryDB behavior.
+This repository uses Mocha with `node-red-node-test-helper` for runtime coverage and
+Playwright for real Node-RED editor coverage. `npm test` manages Redis deployments with
+Docker so the Mocha suite can verify unauthenticated standalone, authenticated
+standalone, Redis Cluster, Redis Sentinel, and optional AWS MemoryDB behavior.
 
 ## Prerequisite
 
@@ -34,6 +35,19 @@ The runner executes these deployments sequentially:
 - `cluster-auth`: Redis 7.2 image, two authenticated Cluster masters with all slots assigned; topology specs plus Redis 7.2-supported cluster-prone command coverage.
 - `sentinel-auth`: Redis 7.2 image, three authenticated Redis data nodes plus three Sentinel processes; topology specs plus Redis 7.2-supported cluster-prone command coverage.
 - `memorydb`: optional AWS MemoryDB topology specs when `MEMORYDB_ENABLED=1`.
+
+Run the browser editor suite:
+
+```bash
+npm run test:playwright
+```
+
+The Playwright runner starts its own Docker deployment with no-auth standalone Redis,
+authenticated standalone Redis, and a two-node authenticated Redis Cluster. It then starts
+real Node-RED editor instances and verifies `redis-config` JSON/env/cluster editing, Lua
+library-save metadata, `redis-in` command field visibility, and `redis-command` typedInput
+initialization. MemoryDB editor coverage is skipped unless all `MEMORYDB_*` variables are
+set.
 
 The raw Mocha command is still available for targeted iteration when you have already
 started a compatible Redis yourself:
@@ -95,7 +109,7 @@ TLS enabled for the cluster connection.
 
 ## Test layout
 
-There are 21 spec files. Do not assume this list is exhaustive forever; confirm with
+There are 21 Mocha spec files. Do not assume this list is exhaustive forever; confirm with
 `ls test/*_spec.js`.
 
 Node behavior and lifecycle:
@@ -124,6 +138,12 @@ Helpers:
 - `test/helpers/cleanup.js` — pattern cleanup for standalone deployments
 - `test/helpers/topology.js` — Node-RED flow invocation helpers for topology specs
 - `test/helpers/cluster-prone.js` — shared same-slot and cross-slot Redis 7.2 command matrix for Cluster, Sentinel, and MemoryDB
+
+Browser editor coverage:
+
+- `test/playwright/redis-editor.spec.js` — real Node-RED editor tests
+- `test/playwright/helpers/node-red-editor.js` — Node-RED editor launch and interaction helpers
+- `test/deployments/playwright-editor/` — Docker Compose deployment used by `npm run test:playwright`
 
 ## How the tests work
 

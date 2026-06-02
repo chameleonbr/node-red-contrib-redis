@@ -218,6 +218,7 @@
             var node = this;
             var isSyncing = false;
             var optionsEditor = null;
+            var lastEnvOptions = this.optionsType === "env" ? ($("#node-config-input-options").val() || "") : "";
             var redisConfigTabs = RED.tabs.create({
                 id: "node-config-redis-tabs",
                 onchange: function(tab) {
@@ -647,6 +648,19 @@
                 if (mode === "sentinel" && $("#redis-config-sentinel-nodes").editableList("items").length === 0) {
                     setListItems("#redis-config-sentinel-nodes", [], 26379);
                 }
+                updateConnectionEditability();
+            }
+
+            function updateConnectionEditability() {
+                var disabled = $("#redis-config-options-type").val() !== "json";
+                $("#redis-config-connection-tab").find("input, select").prop("disabled", disabled);
+                $("#redis-config-cluster-nodes, #redis-config-sentinel-nodes")
+                    .closest(".red-ui-editableList")
+                    .find(".red-ui-editableList-addButton, .red-ui-editableList-item-remove")
+                    .toggle(!disabled);
+                if (!disabled && $("#redis-config-mode").val() === "cluster" && $("#redis-config-cluster-provider").val() !== "cluster") {
+                    $("#redis-config-cluster-tls").prop("checked", true).prop("disabled", true);
+                }
             }
 
             function syncConnectionToEditor() {
@@ -694,11 +708,12 @@
                 $(".redis-config-json-only").toggle(type === "json");
                 $(".redis-config-raw-only").toggle(type !== "json");
                 $("#redis-config-prettify-options").toggle(type === "json");
+                updateConnectionEditability();
                 if (type !== "json") {
                     $("#redis-config-options-raw-label").text(labels[type] || "Value");
                     $("#redis-config-options-raw").attr("placeholder", placeholders[type] || "");
                     $("#redis-config-options-raw-help").text(help[type] || "");
-                    $("#redis-config-options-raw").val($("#node-config-input-options").val());
+                    $("#redis-config-options-raw").val(lastEnvOptions);
                 }
             }
 
@@ -809,6 +824,7 @@
             });
             node.redisConfigOptionsEditor = optionsEditor;
 
+            var initialTabId = this.optionsType === "env" ? "redis-config-tab-options" : "redis-config-tab-connection";
             $("#redis-config-options-type").val(this.optionsType === "env" ? "env" : "json");
             updateOptionsType();
 
@@ -817,6 +833,7 @@
             if ($("#redis-config-options-type").val() === "json") {
                 syncConnectionToEditor();
             }
+            redisConfigTabs.activateTab(initialTabId);
 
             $("#redis-config-mode, #redis-config-cluster-provider").on("change input click keyup", function() {
                 updateVisibility();
@@ -825,12 +842,16 @@
             });
             $("#redis-config-connection-tab input, #redis-config-connection-tab select").on("change keyup", syncConnectionToEditor);
             $("#redis-config-options-type").on("change", function() {
+                if ($("#node-config-input-optionsType").val() === "env") {
+                    lastEnvOptions = $("#redis-config-options-raw").val();
+                }
                 updateOptionsType();
                 if ($("#redis-config-options-type").val() === "json") {
                     syncConnectionToEditor();
                 }
             });
             $("#redis-config-options-raw").on("change keyup", function() {
+                lastEnvOptions = $(this).val();
                 $("#node-config-input-options").val($(this).val());
             });
             $("#redis-config-prettify-options").on("click", function(evt) {
@@ -1097,6 +1118,9 @@ MemoryDB/ElastiCache cluster endpoint, or Redis Sentinel.</p>
         Select <strong>Environment variable</strong> to store the name of an environment
         variable instead of literal JSON in the flow. At runtime, the environment value is
         parsed as JSON when possible; otherwise it is passed to ioredis as a plain value.
+        Saved environment-variable configs reopen on this tab with the variable name
+        selected and populated. While this type is selected, the <strong>Connection</strong>
+        tab is read-only; switch back to <strong>JSON</strong> to edit the Connection tab.
     </dd>
     <dt>Test connection</dt>
     <dd>
@@ -1104,6 +1128,8 @@ MemoryDB/ElastiCache cluster endpoint, or Redis Sentinel.</p>
         Redis client, connect, send <code>PING</code>, expect <code>PONG</code>, then
         disconnect with <code>QUIT</code>. The result is shown next to the button. Failures
         are logged with verbose connection details in the runtime console and Debug sidebar.
+        When <strong>Environment variable</strong> is selected, the test resolves that
+        variable first and reports an error if it is not set.
     </dd>
     <dt>Common examples</dt>
     <dd>

@@ -13,8 +13,10 @@ Key implementation points:
 
 - editor uses typedInput for `options`
 - runtime evaluates `options` using `optionsType`
-- env-string values are parsed as JSON when possible
+- env-string values are verified, then parsed as JSON when possible
 - cluster mode constructs `new Redis.Cluster(options)`
+- parsed option arrays are treated as Redis Cluster startup-node lists even if the
+  saved UI mode flag is stale from a previous JSON single-node configuration
 - cluster startup-node `username`/`password` values are also passed as ioredis
   `redisOptions` so discovered cluster nodes authenticate correctly
 - `dnsLookupStrategy: "identity"` on a cluster startup node enables identity DNS lookup
@@ -22,6 +24,10 @@ Key implementation points:
 - the editor Test connection button posts the current form values to a runtime admin
   endpoint, creates a temporary client, connects, runs `PING`, expects `PONG`, and
   disconnects with `QUIT` without adding the client to the shared connection pool
+- saved environment-variable connection configs reopen on the ConnString tab with the
+  variable name selected; saved JSON configs reopen on the Connection tab
+- while environment-variable connection options are selected, the Connection tab is
+  read-only and becomes editable again when JSON is selected
 
 Safe changes:
 

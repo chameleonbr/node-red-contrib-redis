@@ -27,7 +27,8 @@ Top-level implementation:
 - `../redis.js`
 - `../redis.html`
 
-Tests (21 spec files). Run the Docker-managed matrix with `npm test`; do not rely on this list staying exhaustive — confirm with `ls test/*_spec.js`.
+Tests (21 Mocha spec files). Run the Docker-managed matrix with `npm test`; do not
+rely on this list staying exhaustive — confirm with `ls test/*_spec.js`.
 
 Node behavior and lifecycle:
 
@@ -59,6 +60,13 @@ Deployment topology coverage:
 - `../test/redis_sentinel_deployment_spec.js` — Sentinel discovery/auth, pub/sub, blocking list, Lua, failover/reconnect, Redis 7.2 cluster-prone commands
 - `../test/memorydb_deployment_spec.js` — opt-in AWS MemoryDB cluster/auth, same-slot/cross-slot, Lua, and Redis 7.2 cluster-prone command coverage
 
+Browser editor coverage:
+
+- `../test/playwright/redis-editor.spec.js` — real Node-RED editor coverage for
+  `redis-config`, Lua library save metadata, `redis-in` field visibility, and
+  `redis-command` typedInput initialization
+- `../test/playwright/helpers/node-red-editor.js` — Playwright Node-RED editor helpers
+
 Helper:
 
 - `../test/helpers/cleanup.js`
@@ -70,7 +78,9 @@ Docker test deployments:
 
 - `../scripts/ensure-docker-ubuntu.sh`
 - `../scripts/run-deployment-tests.js`
+- `../scripts/run-playwright-tests.js`
 - `../test/deployments/`
+- `../test/deployments/playwright-editor/`
 
 Examples:
 
@@ -135,6 +145,7 @@ Read:
 - `../redis.js` `RedisLua`
 - `../redis.html` `redis-lua-script`
 - `../test/redis_lua_ui_spec.js`
+- `../test/playwright/redis-editor.spec.js` for real editor/library behavior
 - `../test/redis_status_spec.js`
 
 ### Context injection

@@ -6,6 +6,7 @@
   "scripts": {
     "prepare": "husky",
     "test": "node scripts/run-deployment-tests.js",
+    "test:playwright": "node scripts/run-playwright-tests.js",
     "test:mocha": "mocha",
     "test:mocha:all": "mocha \"test/**/*_spec.js\""
   },
@@ -43,6 +44,7 @@
     "mocha": "^11.7.6",
     "node-red": "^4.1.10",
     "node-red-node-test-helper": "^0.3.6",
+    "playwright": "^1.60.0",
     "prettier": "^3.8.3"
   },
   "dependencies": {

@@ -38,7 +38,7 @@ Core files:
 - `redis.js`
 - `redis.html`
 
-Tests (21 spec files — `ls test/*_spec.js` for the live list):
+Mocha tests (21 spec files — `ls test/*_spec.js` for the live list):
 
 - node behavior/lifecycle: `test/redis_in_spec.js`, `test/redis_out_spec.js`,
   `test/redis_command_spec.js`, `test/redis_status_spec.js`,
@@ -52,6 +52,8 @@ Tests (21 spec files — `ls test/*_spec.js` for the live list):
   `test/string_commands_spec.js`
 - deployment topology: `test/redis_cluster_deployment_spec.js`,
   `test/redis_sentinel_deployment_spec.js`, `test/memorydb_deployment_spec.js`
+- browser editor coverage: `test/playwright/redis-editor.spec.js` with helpers in
+  `test/playwright/helpers/node-red-editor.js`
 
 Supporting files:
 
@@ -60,7 +62,9 @@ Supporting files:
 - `test/helpers/deployment.js`
 - `test/helpers/topology.js`
 - `scripts/run-deployment-tests.js`
+- `scripts/run-playwright-tests.js`
 - `scripts/ensure-docker-ubuntu.sh`
+- `test/deployments/playwright-editor/`
 - `examples/*.json`
 
 ## Working rules
@@ -149,6 +153,7 @@ If the feature changes user configuration:
 Always read:
 
 - `test/redis_lua_ui_spec.js`
+- `test/playwright/redis-editor.spec.js`
 
 Be careful with:
 

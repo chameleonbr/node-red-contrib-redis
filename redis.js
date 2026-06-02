@@ -199,8 +199,12 @@ module.exports = function (RED) {
     return new Redis.Cluster(clusterOptions);
   }
 
+  function isClusterConnection(options, cluster) {
+    return cluster === true || cluster === "true" || Array.isArray(options);
+  }
+
   function buildRedisClient(options, cluster) {
-    if (cluster) {
+    if (isClusterConnection(options, cluster)) {
       return buildClusterClient(options);
     }
     return new Redis(options);
@@ -218,7 +222,7 @@ module.exports = function (RED) {
 
   function buildTestRedisClient(options, cluster) {
     var redisOptions = testRedisOptions({});
-    if (cluster) {
+    if (isClusterConnection(options, cluster)) {
       return buildClusterClient(options, {
         lazyConnect: true,
         slotsRefreshTimeout: 5000,
@@ -252,11 +256,27 @@ module.exports = function (RED) {
     };
   }
 
-  function evaluateConnectionTestOptions(value, valueType) {
+  function normalizeEnvName(value) {
+    var name = String(value || "").trim();
+    var match = name.match(/^\${([^}]+)}$/);
+    return match ? match[1] : name;
+  }
+
+  function evaluateConnectionOptions(value, valueType, node) {
+    valueType = valueType || "json";
     if (valueType === "env") {
-      var envValue = process.env[value];
+      var envName = normalizeEnvName(value);
+      if (!envName) {
+        var missingNameError = new Error("Environment variable name is required");
+        missingNameError.statusCode = 400;
+        throw missingNameError;
+      }
+      var envValue =
+        typeof RED.util.getSetting === "function"
+          ? RED.util.getSetting(node, envName)
+          : process.env[envName];
       if (envValue === undefined) {
-        var envError = new Error("Environment variable " + value + " is not set");
+        var envError = new Error("Environment variable " + envName + " is not set");
         envError.statusCode = 400;
         throw envError;
       }
@@ -339,10 +359,6 @@ module.exports = function (RED) {
       "log: " + safeStringify(payload.log),
       "error: " + safeStringify(payload.error),
     ].join("\n");
-    console.error(text);
-    if (RED.log && typeof RED.log.error === "function") {
-      RED.log.error(text);
-    }
     if (node && typeof node.error === "function") {
       node.error(text, {
         topic: "redis-config test connection",
@@ -354,25 +370,14 @@ module.exports = function (RED) {
 function RedisConfig(n) {
     RED.nodes.createNode(this, n);
     this.name = n.name;
-    this.cluster = n.cluster;
-    if (this.optionsType === "") {
-      this.options = n.options;
-    } else {
-      RED.util.evaluateNodeProperty(n.options, n.optionsType,this,undefined,(err,value) => {
-          if(!err) {
-            // Check if value is a string and optionsType is "env"
-            if (typeof value === 'string' && n.optionsType === "env") {
-                try {
-                    this.options = JSON.parse(value); // Attempt to parse JSON
-                } catch (e) {
-                    console.warn("Failed to parse env as JSON string in redis-config node, use plain value:", e);
-                    this.options = value;  // Keep the value as is if it's not valid JSON
-                }
-            } else {
-                this.options = value;
-            }
-          }
-      });
+    this.cluster = isClusterConnection(undefined, n.cluster);
+    this.optionsType = n.optionsType || "json";
+    try {
+      this.options = evaluateConnectionOptions(n.options, this.optionsType, this);
+      this.cluster = isClusterConnection(this.options, this.cluster);
+    } catch (err) {
+      this.options = undefined;
+      this.error(err.message, null);
     }
   }
   RED.nodes.registerType("redis-config", RedisConfig);
@@ -384,8 +389,8 @@ function RedisConfig(n) {
       var body = req.body || {};
       var node = body.id ? RED.nodes.getNode(body.id) : null;
       try {
-        var options = evaluateConnectionTestOptions(body.options, body.optionsType);
-        var result = await testRedisConnection(options, body.cluster === true || body.cluster === "true");
+        var options = evaluateConnectionOptions(body.options, body.optionsType, node);
+        var result = await testRedisConnection(options, isClusterConnection(options, body.cluster));
         res.json(result);
       } catch (err) {
         var statusCode = err.statusCode || 500;
@@ -544,7 +549,7 @@ function RedisConfig(n) {
               }
             }
           } catch (e) {
-            RED.log.info(e.message);
+            node.log(e.message);
             running = false;
           }
         }

@@ -126,3 +126,72 @@ describe("redis-lua-script UI template", function () {
         });
     });
 });
+
+describe("redis-config UI template", function () {
+    it("opens saved environment-variable configs on the ConnString tab", function () {
+        assert.match(
+            html,
+            /this\.optionsType === "env"\s*\?\s*"redis-config-tab-options"\s*:\s*"redis-config-tab-connection"/,
+            "environment-variable options should activate the ConnString tab when the config editor opens"
+        );
+        assert.match(
+            html,
+            /redisConfigTabs\.activateTab\(initialTabId\)/,
+            "the editor should activate the tab selected from the saved options type"
+        );
+    });
+
+    it("keeps saved JSON configs opening on the Connection tab", function () {
+        assert.match(
+            html,
+            /"redis-config-tab-connection"/,
+            "JSON options should keep the Connection tab as the initial editor tab"
+        );
+        assert.match(
+            html,
+            /\$\(("#redis-config-options-type"|'#redis-config-options-type')\)\.val\(this\.optionsType === "env" \? "env" : "json"\)/,
+            "the Type drop-down should still select JSON unless the saved config is env"
+        );
+    });
+
+    it("makes the Connection tab read-only while environment-variable options are selected", function () {
+        assert.match(
+            html,
+            /function updateConnectionEditability\(\)/,
+            "redis-config should centralize Connection tab editability"
+        );
+        assert.match(
+            html,
+            /#redis-config-connection-tab[\s\S]*?\.prop\("disabled", disabled\)/,
+            "Connection tab inputs and selects should be disabled when env options are selected"
+        );
+        assert.match(
+            html,
+            /red-ui-editableList-addButton[\s\S]*?red-ui-editableList-item-remove[\s\S]*?\.toggle\(!disabled\)/,
+            "editableList add and remove controls should be hidden when env options are selected"
+        );
+        assert.match(
+            html,
+            /updateConnectionEditability\(\);[\s\S]*?if \(\$\("#redis-config-options-type"\)\.val\(\) === "json"\)/,
+            "changing back to JSON should re-enable the Connection tab before syncing form values"
+        );
+    });
+
+    it("does not copy JSON options into the environment-variable textbox when switching type", function () {
+        assert.match(
+            html,
+            /var lastEnvOptions = this\.optionsType === "env" \? \(\$\(("#node-config-input-options"|'#node-config-input-options')\)\.val\(\) \|\| ""\) : ""/,
+            "redis-config should track the last environment-variable name separately from JSON options"
+        );
+        assert.match(
+            html,
+            /\$\(("#redis-config-options-raw"|'#redis-config-options-raw')\)\.val\(lastEnvOptions\)/,
+            "switching to env should populate the textbox from the remembered env variable name, not the JSON options"
+        );
+        assert.doesNotMatch(
+            html,
+            /\$\(("#redis-config-options-raw"|'#redis-config-options-raw')\)\.val\(\$\(("#node-config-input-options"|'#node-config-input-options')\)\.val\(\)\)/,
+            "switching to env must not copy the saved JSON options into the env variable textbox"
+        );
+    });
+});

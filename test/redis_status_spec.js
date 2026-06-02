@@ -1,5 +1,7 @@
 "use strict";
 const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
 const helper = require("node-red-node-test-helper");
 const redisNode = require("../redis.js");
 const Redis = require("ioredis");
@@ -36,6 +38,20 @@ function onStatus(node, predicate, done) {
 function isGreen(s) { return s.fill === "green"; }
 function isRed(s)   { return s.fill === "red"; }
 
+function redisUrlFromEnv() {
+    const host = process.env.REDIS_HOST || "127.0.0.1";
+    const port = process.env.REDIS_PORT || 6379;
+    let auth = "";
+    if (process.env.REDIS_USERNAME || process.env.REDIS_PASSWORD) {
+        auth =
+            encodeURIComponent(process.env.REDIS_USERNAME || "default") +
+            ":" +
+            encodeURIComponent(process.env.REDIS_PASSWORD || "") +
+            "@";
+    }
+    return `redis://${auth}${host}:${port}`;
+}
+
 describe("node connection status", function () {
     this.timeout(5000);
 
@@ -45,6 +61,40 @@ describe("node connection status", function () {
     });
 
     describe("redis-config test connection endpoint", function () {
+        const ENV_OPTIONS_NAME = "NODE_RED_REDIS_TEST_OPTIONS";
+        const ENV_URL_NAME = "NODE_RED_REDIS_TEST_URL";
+        const MISSING_ENV_NAME = "NODE_RED_REDIS_TEST_MISSING_OPTIONS";
+        let originalEnvOptions;
+        let originalEnvUrl;
+        let originalMissingEnv;
+
+        beforeEach(function () {
+            originalEnvOptions = process.env[ENV_OPTIONS_NAME];
+            originalEnvUrl = process.env[ENV_URL_NAME];
+            originalMissingEnv = process.env[MISSING_ENV_NAME];
+            process.env[ENV_OPTIONS_NAME] = GOOD_CONFIG.options;
+            process.env[ENV_URL_NAME] = redisUrlFromEnv();
+            delete process.env[MISSING_ENV_NAME];
+        });
+
+        afterEach(function () {
+            if (originalEnvOptions === undefined) {
+                delete process.env[ENV_OPTIONS_NAME];
+            } else {
+                process.env[ENV_OPTIONS_NAME] = originalEnvOptions;
+            }
+            if (originalEnvUrl === undefined) {
+                delete process.env[ENV_URL_NAME];
+            } else {
+                process.env[ENV_URL_NAME] = originalEnvUrl;
+            }
+            if (originalMissingEnv === undefined) {
+                delete process.env[MISSING_ENV_NAME];
+            } else {
+                process.env[MISSING_ENV_NAME] = originalMissingEnv;
+            }
+        });
+
         it("connects, pings, and gracefully disconnects with current JSON options", async function () {
             let quitCalled = false;
             const originalQuit = Redis.prototype.quit;
@@ -75,12 +125,177 @@ describe("node connection status", function () {
             }
         });
 
-        it("returns verbose errors and calls node.error when the test connection fails", async function () {
-            let consoleErrorCalled = false;
-            const originalConsoleError = console.error;
-            console.error = function () {
-                consoleErrorCalled = true;
-            };
+        it("connects, pings, and gracefully disconnects with options read from an environment variable", async function () {
+            await helper.load(redisNode, [GOOD_CONFIG]);
+            const res = await helper
+                .request()
+                .post("/redis-config/test")
+                .send({
+                    id: "cfg-good",
+                    cluster: false,
+                    optionsType: "env",
+                    options: ENV_OPTIONS_NAME,
+                })
+                .expect(200);
+
+            assert.strictEqual(res.body.success, true);
+            assert.strictEqual(res.body.response, "PONG");
+            assert.match(res.body.message, /PING -> PONG/);
+        });
+
+        it("uses environment-variable options instead of the saved JSON config node during test connection", async function () {
+            await helper.load(redisNode, [BAD_CONFIG]);
+            const res = await helper
+                .request()
+                .post("/redis-config/test")
+                .send({
+                    id: "cfg-bad",
+                    cluster: false,
+                    optionsType: "env",
+                    options: ENV_OPTIONS_NAME,
+                })
+                .expect(200);
+
+            assert.strictEqual(res.body.success, true);
+            assert.strictEqual(res.body.response, "PONG");
+        });
+
+        it("uses a cluster client when environment-variable options resolve to startup-node array", async function () {
+            const envName = "NODE_RED_REDIS_TEST_CLUSTER_OPTIONS";
+            const originalEnv = process.env[envName];
+            const originalClusterDescriptor = Object.getOwnPropertyDescriptor(Redis, "Cluster");
+            let clusterArgs;
+
+            class FakeCluster {
+                constructor(startupNodes, clientOptions) {
+                    clusterArgs = { startupNodes, clientOptions };
+                    this.status = "wait";
+                    this.listeners = {};
+                }
+                setMaxListeners() {}
+                on(eventName, listener) {
+                    this.listeners[eventName] = this.listeners[eventName] || [];
+                    this.listeners[eventName].push(listener);
+                    return this;
+                }
+                removeListener(eventName, listener) {
+                    this.listeners[eventName] = (this.listeners[eventName] || []).filter((item) => item !== listener);
+                    return this;
+                }
+                emit(eventName, value) {
+                    (this.listeners[eventName] || []).forEach((listener) => listener(value));
+                }
+                async connect() {
+                    this.status = "ready";
+                    this.emit("connect");
+                    this.emit("ready");
+                }
+                async ping() {
+                    return "PONG";
+                }
+                async quit() {
+                    this.status = "end";
+                    this.emit("end");
+                    return "OK";
+                }
+                disconnect() {
+                    this.status = "end";
+                    this.emit("end");
+                }
+            }
+
+            process.env[envName] = JSON.stringify([
+                {
+                    dnsLookupStrategy: "identity",
+                    host: "clustercfg.example.memorydb.local",
+                    port: 6379,
+                    username: "cluster-user",
+                    password: "cluster-pass",
+                },
+            ]);
+            Object.defineProperty(Redis, "Cluster", {
+                value: FakeCluster,
+                configurable: true,
+            });
+            try {
+                await helper.load(redisNode, [GOOD_CONFIG]);
+                const res = await helper
+                    .request()
+                    .post("/redis-config/test")
+                    .send({
+                        id: "cfg-good",
+                        cluster: false,
+                        optionsType: "env",
+                        options: envName,
+                    })
+                    .expect(200);
+
+                assert.strictEqual(res.body.success, true);
+                assert.strictEqual(res.body.response, "PONG");
+                assert.ok(clusterArgs, "test connection should construct Redis.Cluster");
+                assert.deepStrictEqual(clusterArgs.startupNodes, [
+                    {
+                        host: "clustercfg.example.memorydb.local",
+                        port: 6379,
+                        username: "cluster-user",
+                        password: "cluster-pass",
+                    },
+                ]);
+                assert.strictEqual(clusterArgs.clientOptions.redisOptions.username, "cluster-user");
+                assert.strictEqual(clusterArgs.clientOptions.redisOptions.password, "cluster-pass");
+                assert.deepStrictEqual(clusterArgs.clientOptions.redisOptions.tls, {});
+                assert.strictEqual(typeof clusterArgs.clientOptions.dnsLookup, "function");
+            } finally {
+                Object.defineProperty(Redis, "Cluster", originalClusterDescriptor);
+                if (originalEnv === undefined) {
+                    delete process.env[envName];
+                } else {
+                    process.env[envName] = originalEnv;
+                }
+            }
+        });
+
+        it("connects with a Redis URL read from an environment variable", async function () {
+            await helper.load(redisNode, [GOOD_CONFIG]);
+            const res = await helper
+                .request()
+                .post("/redis-config/test")
+                .send({
+                    id: "cfg-good",
+                    cluster: false,
+                    optionsType: "env",
+                    options: ENV_URL_NAME,
+                })
+                .expect(200);
+
+            assert.strictEqual(res.body.success, true);
+            assert.strictEqual(res.body.response, "PONG");
+        });
+
+        it("returns a clear error when the selected environment variable is not set", async function () {
+            await helper.load(redisNode, [GOOD_CONFIG]);
+            const res = await helper
+                .request()
+                .post("/redis-config/test")
+                .send({
+                    id: "cfg-good",
+                    cluster: false,
+                    optionsType: "env",
+                    options: MISSING_ENV_NAME,
+                })
+                .expect(400);
+
+            assert.strictEqual(res.body.success, false);
+            assert.match(res.body.message, new RegExp("Environment variable " + MISSING_ENV_NAME + " is not set"));
+        });
+
+        it("does not use console.log or console.error in redis.js runtime logging", function () {
+            const source = fs.readFileSync(path.join(__dirname, "../redis.js"), "utf8");
+            assert.doesNotMatch(source, /console\.(log|error)\s*\(/);
+            assert.doesNotMatch(source, /RED\.log\.(info|error)\s*\(/);
+        });
+
+        it("returns verbose errors and logs through node.error when the test connection fails", async function () {
             await helper.load(redisNode, [BAD_CONFIG]);
             const config = helper.getNode("cfg-bad");
             let errorCall;
@@ -88,30 +303,25 @@ describe("node connection status", function () {
                 errorCall = call;
             });
 
-            try {
-                const res = await helper
-                    .request()
-                    .post("/redis-config/test")
-                    .send({
-                        id: "cfg-bad",
-                        cluster: false,
-                        optionsType: "json",
-                        options: BAD_CONFIG.options,
-                    })
-                    .expect(500);
+            const res = await helper
+                .request()
+                .post("/redis-config/test")
+                .send({
+                    id: "cfg-bad",
+                    cluster: false,
+                    optionsType: "json",
+                    options: BAD_CONFIG.options,
+                })
+                .expect(500);
 
-                await new Promise((resolve) => setImmediate(resolve));
+            await new Promise((resolve) => setImmediate(resolve));
 
-                assert.strictEqual(res.body.success, false);
-                assert.match(res.body.message, /Connection test failed/);
-                assert.ok(res.body.error && res.body.error.message, "error details should be returned");
-                assert.ok(Array.isArray(res.body.log), "verbose log should be returned");
-                assert.ok(consoleErrorCalled, "full error should be logged to console");
-                assert.ok(errorCall, "config node should call node.error");
-                assert.match(String(errorCall.args[0]), /redis-config test connection failed/);
-            } finally {
-                console.error = originalConsoleError;
-            }
+            assert.strictEqual(res.body.success, false);
+            assert.match(res.body.message, /Connection test failed/);
+            assert.ok(res.body.error && res.body.error.message, "error details should be returned");
+            assert.ok(Array.isArray(res.body.log), "verbose log should be returned");
+            assert.ok(errorCall, "config node should call node.error");
+            assert.match(String(errorCall.args[0]), /redis-config test connection failed/);
         });
     });
 
