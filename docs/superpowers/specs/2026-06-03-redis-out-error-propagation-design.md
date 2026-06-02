@@ -166,8 +166,8 @@ Update in the same change:
 
 ## Versioning / migration
 
-Treat as a **bug fix**, not a breaking redesign — no major version bump proposed for this change
-alone. The only observable differences are that previously-silent write failures now surface and
-`done()` lands after the ack. Call this out in the release notes / changelog for the upstream PR
-so maintainers of existing flows know failures will now appear (and may want Catch nodes where
-they previously saw silent success).
+Treat as a **bug fix**. The package version **stays at `2.0.0`** — no major bump for this
+change. The only observable differences are that previously-silent write failures now surface
+and `done()` lands after the ack. Call this out in the release notes / changelog so maintainers
+of existing flows know failures will now appear (and may want Catch nodes where they previously
+saw silent success).
