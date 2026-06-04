@@ -38,6 +38,7 @@ Node behavior and lifecycle:
 - `../test/redis_status_spec.js` — status + shutdown across **all** node types
 - `../test/redis_lua_conn_spec.js` — Lua connection isolation across config nodes
 - `../test/redis_lua_ui_spec.js` — Lua editor/library UI (static HTML parse, no Redis needed)
+- `../test/redis_credentials_spec.js` — `redis-config` secret merge from the `secrets` credential (single/cluster/sentinel/legacy/env) plus guarded end-to-end auth
 
 Command-family coverage (all drive `redis-command` via `client.call`):
 

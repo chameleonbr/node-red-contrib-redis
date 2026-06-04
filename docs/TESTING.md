@@ -120,6 +120,7 @@ Node behavior and lifecycle:
 - `redis_status_spec.js` — `node.status` and shutdown across all node types
 - `redis_lua_conn_spec.js` — Lua connection isolation across config nodes
 - `redis_lua_ui_spec.js` — Lua editor/library UI; static HTML parse, needs no Redis
+- `redis_credentials_spec.js` — `redis-config` secret merge from the `secrets` credential; constructor-only (no Redis) plus a guarded end-to-end auth case in the auth stage
 
 Command-family coverage, all driving `redis-command` through `client.call`:
 

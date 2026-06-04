@@ -193,6 +193,62 @@
 <script type="text/javascript">
     "use strict";
     /*global RED*/
+    // Secret extract/merge for redis-config. MUST stay in sync with the copy in
+    // redis.js (runtime): same paths — single/sentinel `password`, sentinel
+    // `sentinelPassword`, cluster per-node `nodes[i]`.
+    function extractSecrets(options) {
+        var secrets = {};
+        if (Array.isArray(options)) {
+            var pws = options.map(function (node) {
+                return node && node.password ? node.password : "";
+            });
+            if (pws.some(function (p) { return p; })) { secrets.nodes = pws; }
+            var strippedNodes = options.map(function (node) {
+                var copy = Object.assign({}, node);
+                delete copy.password;
+                return copy;
+            });
+            return { stripped: strippedNodes, secrets: secrets };
+        }
+        if (options && typeof options === "object") {
+            var stripped = Object.assign({}, options);
+            if (Array.isArray(options.sentinels)) {
+                if (options.password) { secrets.password = options.password; }
+                if (options.sentinelPassword) { secrets.sentinelPassword = options.sentinelPassword; }
+                delete stripped.password;
+                delete stripped.sentinelPassword;
+            } else {
+                if (options.password) { secrets.password = options.password; }
+                delete stripped.password;
+            }
+            return { stripped: stripped, secrets: secrets };
+        }
+        return { stripped: options, secrets: secrets };
+    }
+    function mergeSecrets(options, secrets) {
+        if (!secrets || typeof secrets !== "object") { return options; }
+        if (Array.isArray(options)) {
+            if (Array.isArray(secrets.nodes)) {
+                secrets.nodes.forEach(function (pw, i) {
+                    if (pw && options[i]) { options[i].password = pw; }
+                });
+            }
+            return options;
+        }
+        if (options && typeof options === "object") {
+            if (Array.isArray(options.sentinels)) {
+                if (secrets.password) { options.password = secrets.password; }
+                if (secrets.sentinelPassword) { options.sentinelPassword = secrets.sentinelPassword; }
+            } else if (secrets.password) {
+                options.password = secrets.password;
+            }
+        }
+        return options;
+    }
+    function parseSecrets(value) {
+        if (!value) { return {}; }
+        try { return JSON.parse(value) || {}; } catch (e) { return {}; }
+    }
     RED.nodes.registerType('redis-config', {
         category: 'config',
         defaults: {
@@ -210,6 +266,9 @@
                 value: false
             },
             optionsType: { value: "json" }
+        },
+        credentials: {
+            secrets: { type: "text" }
         },
         label: function () {
             return this.name || "Redis host";
@@ -828,8 +887,8 @@
             $("#redis-config-options-type").val(this.optionsType === "env" ? "env" : "json");
             updateOptionsType();
 
-            var initialOptions = parseJsonOptions();
-            populateFormFromOptions(initialOptions || {});
+            var initialOptions = mergeSecrets(parseJsonOptions() || {}, parseSecrets($("#node-config-input-secrets").val()));
+            populateFormFromOptions(initialOptions);
             if ($("#redis-config-options-type").val() === "json") {
                 syncConnectionToEditor();
             }
@@ -885,15 +944,24 @@
             $("#node-config-input-optionsType").val(type);
             if (type === "json" && this.redisConfigOptionsEditor) {
                 var editorVal = this.redisConfigOptionsEditor.getValue();
+                var parsed = null;
                 try {
-                    JSON.parse(editorVal);
-                    $("#node-config-input-options").val(editorVal);
+                    parsed = JSON.parse(editorVal);
                 } catch (e) {
                     // Non-JSON editor content (e.g. AWS dnsLookup appended) -
-                    // keep the hidden field value set by syncConnectionToEditor
+                    // fall back to the hidden field kept in sync by syncConnectionToEditor
+                    try { parsed = JSON.parse($("#node-config-input-options").val()); } catch (e2) { parsed = null; }
+                }
+                if (parsed !== null && parsed !== undefined) {
+                    var result = extractSecrets(parsed);
+                    $("#node-config-input-options").val(JSON.stringify(result.stripped));
+                    $("#node-config-input-secrets").val(
+                        Object.keys(result.secrets).length ? JSON.stringify(result.secrets) : ""
+                    );
                 }
             } else if (type !== "json") {
                 $("#node-config-input-options").val($("#redis-config-options-raw").val());
+                $("#node-config-input-secrets").val("");
             }
             $("#node-config-input-cluster").prop("checked", $("#redis-config-mode").val() === "cluster");
             if (this.redisConfigOptionsEditor) {
@@ -1075,6 +1143,7 @@
     </div>
     <input type="hidden" id="node-config-input-options">
     <input type="hidden" id="node-config-input-optionsType">
+    <input type="hidden" id="node-config-input-secrets">
     <input type="checkbox" id="node-config-input-cluster" style="display:none;">
 </script>
 
@@ -1082,6 +1151,10 @@
 <p>Defines a shared Redis connection for all redis nodes that reference it.</p>
 <p>The connection can target a standalone Redis server, Redis Cluster, AWS
 MemoryDB/ElastiCache cluster endpoint, or Redis Sentinel.</p>
+<p><b>Secret storage:</b> in JSON mode, passwords are saved in Node-RED&rsquo;s encrypted
+credentials (not in the exported flow) and merged into the connection at runtime. With the
+<b>Environment variable</b> type, the secret stays in the environment and is never written to
+the flow.</p>
 
 <h3>Properties</h3>
 <dl class="message-properties">

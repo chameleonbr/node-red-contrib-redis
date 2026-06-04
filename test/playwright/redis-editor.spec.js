@@ -130,6 +130,37 @@ test.describe("Node-RED Redis editor", () => {
     });
   });
 
+  test("redis-config stores the password as a credential, not in the flow", async ({ page }) => {
+    nodeRed = await startNodeRed(noauthOptions());
+    await openEditor(page, nodeRed.url);
+
+    await openRedisConfig(page);
+    await page.locator("#red-ui-tab-redis-config-tab-connection").click();
+    await setSelectValue(page, "#redis-config-mode", "single");
+    await setInputValue(page, "#redis-config-single-host", "127.0.0.1");
+    await setInputValue(page, "#redis-config-single-port", "6379");
+    await setInputValue(page, "#redis-config-single-username", "default");
+    await setInputValue(page, "#redis-config-single-password", "super-secret-pw");
+    await saveConfigDialog(page);
+    await deploy(page);
+
+    // The persisted flow must not contain the password anywhere.
+    const flowsText = await (await page.request.get(nodeRed.url + "flows")).text();
+    expect(flowsText).not.toContain("super-secret-pw");
+
+    // The text credential for the config node holds the secret.
+    const cred = await (
+      await page.request.get(nodeRed.url + "credentials/redis-config/redis-config-1")
+    ).json();
+    expect(JSON.stringify(cred)).toContain("super-secret-pw");
+
+    // Reopen and confirm the password round-trips into the form.
+    await openRedisConfig(page);
+    await page.locator("#red-ui-tab-redis-config-tab-connection").click();
+    await expect(page.locator("#redis-config-single-password")).toHaveValue("super-secret-pw");
+    await saveConfigDialog(page);
+  });
+
   test("redis-config can target MemoryDB env options when configured", async ({ page }) => {
     test.skip(
       !memoryDbConfigured(),

@@ -100,6 +100,10 @@ This intentionally skips `quit()` and disconnects immediately because blocking c
 Stores Redis connection options and cluster mode.
 Options can come from typedInput values and are evaluated in runtime code.
 
+In JSON mode, passwords are kept in a `text`-type `secrets` credential (encrypted, never in
+`flows.json`) and merged into `options` at runtime; legacy password-in-options still works.
+`extractSecrets`/`mergeSecrets` are mirrored in `redis.js` and `redis.html`.
+
 ### `redis-in`
 
 Implements:

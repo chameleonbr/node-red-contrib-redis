@@ -387,6 +387,67 @@ module.exports = function (RED) {
     }
   }
 
+  // Secret extract/merge for redis-config. MUST stay in sync with the copy in
+  // redis.html (editor): same paths — single/sentinel `password`, sentinel
+  // `sentinelPassword`, cluster per-node `nodes[i]`.
+  function extractSecrets(options) {
+    var secrets = {};
+    if (Array.isArray(options)) {
+      var pws = options.map(function (node) {
+        return node && node.password ? node.password : "";
+      });
+      if (pws.some(function (p) { return p; })) {
+        secrets.nodes = pws;
+      }
+      var strippedNodes = options.map(function (node) {
+        var copy = Object.assign({}, node);
+        delete copy.password;
+        return copy;
+      });
+      return { stripped: strippedNodes, secrets: secrets };
+    }
+    if (options && typeof options === "object") {
+      var stripped = Object.assign({}, options);
+      if (Array.isArray(options.sentinels)) {
+        if (options.password) { secrets.password = options.password; }
+        if (options.sentinelPassword) { secrets.sentinelPassword = options.sentinelPassword; }
+        delete stripped.password;
+        delete stripped.sentinelPassword;
+      } else {
+        if (options.password) { secrets.password = options.password; }
+        delete stripped.password;
+      }
+      return { stripped: stripped, secrets: secrets };
+    }
+    return { stripped: options, secrets: secrets };
+  }
+
+  function mergeSecrets(options, secrets) {
+    if (!secrets || typeof secrets !== "object") { return options; }
+    if (Array.isArray(options)) {
+      if (Array.isArray(secrets.nodes)) {
+        secrets.nodes.forEach(function (pw, i) {
+          if (pw && options[i]) { options[i].password = pw; }
+        });
+      }
+      return options;
+    }
+    if (options && typeof options === "object") {
+      if (Array.isArray(options.sentinels)) {
+        if (secrets.password) { options.password = secrets.password; }
+        if (secrets.sentinelPassword) { options.sentinelPassword = secrets.sentinelPassword; }
+      } else if (secrets.password) {
+        options.password = secrets.password;
+      }
+    }
+    return options;
+  }
+
+  function parseSecrets(value) {
+    if (!value) { return {}; }
+    try { return JSON.parse(value) || {}; } catch (e) { return {}; }
+  }
+
 function RedisConfig(n) {
     RED.nodes.createNode(this, n);
     this.name = n.name;
@@ -394,13 +455,23 @@ function RedisConfig(n) {
     this.optionsType = n.optionsType || "json";
     try {
       this.options = evaluateConnectionOptions(n.options, this.optionsType, this);
+      if (this.optionsType !== "env") {
+        this.options = mergeSecrets(
+          this.options,
+          parseSecrets(this.credentials && this.credentials.secrets)
+        );
+      }
       this.cluster = isClusterConnection(this.options, this.cluster);
     } catch (err) {
       this.options = undefined;
       this.error(err.message, null);
     }
   }
-  RED.nodes.registerType("redis-config", RedisConfig);
+  RED.nodes.registerType("redis-config", RedisConfig, {
+    credentials: {
+      secrets: { type: "text" },
+    },
+  });
 
   RED.httpAdmin.post(
     "/redis-config/test",
