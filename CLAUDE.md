@@ -1,7 +1,15 @@
-# CLAUDE.md
+# Agent guide — node-red-contrib-redis
+
+Shared entry point for AI coding agents. `AGENTS.md` is a symlink to this file, so Claude and Codex read the same guidance.
 
 This project is a Node-RED custom node package implemented in JavaScript ES6+ with Node.js v24 as the working runtime target, Node-RED v4.1.10 as the editor/runtime target, and ioredis v5.11.0 as the Redis client.
 The package registers one Node-RED module entrypoint in `package.json` and is implemented primarily in `redis.js` and `redis.html`.
+
+## Agents & entry points
+
+- **Claude** reads `CLAUDE.md` (this file) + `.claude/skills/node-red-contrib-redis-maintainer/SKILL.md`.
+- **Codex** reads `AGENTS.md` (a symlink to this file) + `.codex/skills/node-red-contrib-redis-maintainer/SKILL.md` (a symlink to the `.claude` skill).
+- One source of truth per artifact — edit the canonical file and both tools get it.
 
 ## Project purpose
 
@@ -30,6 +38,13 @@ For Lua/library-related changes, also read:
 
 - `test/redis_lua_ui_spec.js`
 - the `redis-lua-script` section in `docs/NODE_GUIDE.md`
+
+## Commands
+
+- `npm install` — install dependencies
+- `npm test` — Docker-managed deployment test suite
+- `npm run test:mocha -- test/<spec>.js` — one spec, against a Redis you started yourself
+- `npm run test:playwright` — run web ui based test
 
 ## Source map
 

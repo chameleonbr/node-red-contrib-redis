@@ -21,7 +21,7 @@ Produce the smallest safe change that preserves:
 
 Read these before making changes:
 
-1. Claude: `CLAUDE.md`, Codex: `AGENTS.md`
+1. Claude: `CLAUDE.md`, Codex: `AGENTS.md` (a symlink to `CLAUDE.md`)
 2. `docs/REFERENCE_MAP.md`
 3. `docs/ARCHITECTURE.md`
 4. `docs/NODE_GUIDE.md`

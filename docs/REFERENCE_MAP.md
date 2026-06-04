@@ -11,6 +11,8 @@ For any task, start with the entry point for your agent:
 - Claude: `../CLAUDE.md` and
   `../.claude/skills/node-red-contrib-redis-maintainer/SKILL.md`
 
+`AGENTS.md` is a symlink to `CLAUDE.md`, so both agents read the same guidance.
+
 Then read:
 
 1. `ARCHITECTURE.md`
@@ -99,7 +101,7 @@ User-facing docs:
 
 Agent docs:
 
-- `../AGENTS.md`
+- `../AGENTS.md` - symlink to `../CLAUDE.md` (shared agent guide)
 - `../.codex/skills/node-red-contrib-redis-maintainer/SKILL.md` - symlink to the shared maintainer skill text
 - `../CLAUDE.md`
 - `../.claude/skills/node-red-contrib-redis-maintainer/SKILL.md`
