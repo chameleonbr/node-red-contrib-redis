@@ -1283,6 +1283,10 @@ MemoryDB/ElastiCache cluster endpoint, or Redis Sentinel.</p>
 <script type="text/x-red" data-help-name="redis-in">
 <p>Listens to Redis and emits a message for every value received. The node opens a
 dedicated connection that stays alive until the flow is stopped or redeployed.</p>
+<p>Blocking inputs (BLPOP/BRPOP/BZPOPMIN/BZPOPMAX/XREADGROUP) auto-recover: if a command
+fails or the connection drops, the node logs a warning, shows a <em>retrying</em> status,
+and retries with capped backoff. The consumer stops only when the flow is stopped or
+redeployed.</p>
 
 <h3>Outputs</h3>
 <dl class="message-properties">
@@ -1396,7 +1400,7 @@ Supported wildcards: <code>*</code> (any sequence), <code>?</code> (single chara
 <h4>XREADGROUP &mdash; Stream Consumer Group Read <em>since Redis 5.0</em></h4>
 <p>Reads new messages from a Redis Stream via a consumer group. Each message is delivered
 to exactly one consumer in the group, enabling parallel processing across multiple nodes.
-If the consumer group does not exist, the node retries automatically every 2 seconds
+If the consumer group does not exist, the node retries automatically with capped backoff
 while logging a warning &mdash; create the group with <code>XGROUP CREATE</code> first.</p>
 <ul>
     <li><strong>Topic format:</strong> <code>&lt;stream-key&gt;:&gt;</code><br>

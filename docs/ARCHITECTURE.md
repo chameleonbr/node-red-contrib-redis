@@ -111,6 +111,10 @@ Implements:
 
 It sends Node-RED messages from Redis events or blocking loops.
 
+The blocking loops (blpop/brpop/bzpop/xreadgroup) retry every error with capped backoff and
+end only on node close; the close handler cancels any pending backoff. pub/sub recovery is
+handled by ioredis re-subscription.
+
 ### `redis-out`
 
 Implements focused write operations with custom payload shaping for selected commands such as:

@@ -6,6 +6,26 @@ module.exports = function (RED) {
 
   const GRACEFUL_QUIT_TIMEOUT_MS = 2000;
   const TEST_CONNECTION_TIMEOUT_MS = 10000;
+  const BLOCKING_RETRY_BASE_MS = 250;
+  const BLOCKING_RETRY_CAP_MS = 5000;
+
+  // Equal-jitter capped exponential backoff for supervised blocking-input loops.
+  // Never returns 0, so an immediately-rejecting command cannot become a busy loop.
+  function blockingBackoffDelay(attempt) {
+    const ceil = Math.min(BLOCKING_RETRY_CAP_MS, BLOCKING_RETRY_BASE_MS * Math.pow(2, attempt));
+    const half = ceil / 2;
+    return Math.floor(half + Math.random() * half);
+  }
+
+  // Interruptible backoff sleep. Stores a canceller on the node so the close
+  // handler can wake a pending retry immediately on redeploy/shutdown.
+  function blockingSleep(ms, node) {
+    return new Promise(function (resolve) {
+      var finish = function () { node._blockingRetryCancel = null; resolve(); };
+      var timer = setTimeout(finish, ms);
+      node._blockingRetryCancel = function () { clearTimeout(timer); finish(); };
+    });
+  }
 
   // Attaches ioredis connection-event listeners to drive node.status.
   // Returns a cleanup function that removes all attached listeners.
@@ -429,6 +449,7 @@ function RedisConfig(n) {
       removeListeners();
       node.status({});
       running = false;
+      if (node._blockingRetryCancel) { node._blockingRetryCancel(); }
       // Blocking commands (BLPOP/XREADGROUP BLOCK 0) queue QUIT behind themselves
       // and never release the socket — skip QUIT and disconnect immediately so the
       // in-flight command errors, the while loop sees !running and exits cleanly.
@@ -479,9 +500,11 @@ function RedisConfig(n) {
     } else if (node.command === 'xreadgroup') {
         const [stream, lastid] = node.topic.split(':');
         (async () => {
+            let attempt = 0;
             while (running) {
                 try {
                     const data = await client.xreadgroup('GROUP', node.groupname, node.consumername, 'BLOCK', 0, 'STREAMS', stream, lastid);
+                    attempt = 0;
                     if (data) {
                         data.forEach(function (streamResult) {
                             const streamName = streamResult[0];
@@ -508,13 +531,14 @@ function RedisConfig(n) {
                     }
                 } catch (err) {
                     if (!running) return;
+                    attempt += 1;
                     if (err.message && err.message.startsWith('NOGROUP')) {
-                        node.warn('Consumer group "' + node.groupname + '" not found on stream "' + stream + '". Retrying in 2s — run the setup step to create it.');
-                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        node.warn('Consumer group "' + node.groupname + '" not found on stream "' + stream + '". Retrying — run the setup step (XGROUP CREATE) to create it.');
                     } else {
-                        node.error(err, { topic: node.topic });
-                        running = false;
+                        node.warn('redis-in xreadgroup error, retrying: ' + err.message);
                     }
+                    node.status({ fill: "yellow", shape: "ring", text: "retrying" });
+                    await blockingSleep(blockingBackoffDelay(attempt), node);
                 }
             }
         })();
@@ -522,9 +546,11 @@ function RedisConfig(n) {
 
     else {
       (async () => {
+        let attempt = 0;
         while (running) {
           try {
             const data = await client[node.command](node.topic, Number(node.timeout));
+            attempt = 0;
             if (data !== null && data.length >= 2) {
               var payload = null;
               var topic = data[0] || node.topic;
@@ -549,8 +575,11 @@ function RedisConfig(n) {
               }
             }
           } catch (e) {
-            node.log(e.message);
-            running = false;
+            if (!running) break;
+            attempt += 1;
+            node.warn("redis-in " + node.command + " error, retrying: " + e.message);
+            node.status({ fill: "yellow", shape: "ring", text: "retrying" });
+            await blockingSleep(blockingBackoffDelay(attempt), node);
           }
         }
       })();

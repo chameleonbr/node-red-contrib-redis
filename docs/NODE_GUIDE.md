@@ -69,11 +69,20 @@ Payload handling:
 - when parsing fails, raw values are forwarded
 - `xreadgroup` returns an object map when `obj` is true, otherwise a flat field/value array
 
+Recovery:
+
+- blocking loops (blpop/brpop/bzpop/xreadgroup) retry every error with capped backoff
+  (250ms→5s, jitter) and keep running; only node close stops them
+- retries log via `node.warn` and show a yellow `retrying` status; a persistent failure
+  (e.g. WRONGTYPE) stays visible instead of stopping silently
+- pub/sub is unaffected — ioredis re-subscribes automatically after reconnect
+
 Shutdown rules:
 
 - always remove listeners
 - always clear status
 - force disconnect for blocking shutdown
+- cancel any pending retry backoff on close
 
 Read before editing:
 
