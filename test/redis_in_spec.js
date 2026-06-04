@@ -3,6 +3,7 @@ const helper = require("node-red-node-test-helper");
 const redisNode = require("../redis.js");
 const { cleanupKeys } = require("./helpers/cleanup");
 const { directRedis, redisConfigNode } = require("./helpers/deployment");
+const Redis = require("ioredis");
 
 helper.init(require.resolve("node-red"));
 
@@ -518,6 +519,104 @@ describe("redis-in node", function () {
             });
 
             setTimeout(() => c.zadd("test:in:bzpopmax:float", 3.14, "pi-task"), 150);
+        });
+    });
+
+    // ── auto-recovery ────────────────────────────────────────────────────────
+
+    it("blpop — recovers and keeps consuming after a transient connection error", function (done) {
+        const originalBlpop = Redis.prototype.blpop;
+        // Reject the first blpop (simulate a dropped connection), then restore the
+        // real implementation for every subsequent call.
+        Redis.prototype.blpop = function () {
+            Redis.prototype.blpop = originalBlpop;
+            return Promise.reject(new Error("Connection is closed."));
+        };
+
+        helper.load(redisNode, makeInFlow("blpop", "test:in:recover:blpop", false), function () {
+            const h = helper.getNode("h");
+            const c = direct();
+            const giveUp = setTimeout(function () {
+                Redis.prototype.blpop = originalBlpop;
+                c.disconnect();
+                done(new Error("no message received — blocking loop did not recover from the error"));
+            }, 4000);
+
+            h.on("input", function (msg) {
+                clearTimeout(giveUp);
+                Redis.prototype.blpop = originalBlpop;
+                c.disconnect();
+                try {
+                    msg.payload.should.equal("after-recovery");
+                    done();
+                } catch (e) { done(e); }
+            });
+
+            setTimeout(() => c.rpush("test:in:recover:blpop", "after-recovery"), 400);
+        });
+    });
+
+    it("xreadgroup — recovers and keeps consuming after a transient connection error", function (done) {
+        const STREAM = "testinxrgrecover";
+        const GROUP = "grprecover";
+        const c = direct();
+        const originalXreadgroup = Redis.prototype.xreadgroup;
+        Redis.prototype.xreadgroup = function () {
+            Redis.prototype.xreadgroup = originalXreadgroup;
+            return Promise.reject(new Error("Connection is closed."));
+        };
+
+        c.xgroup("CREATE", STREAM, GROUP, "0", "MKSTREAM")
+            .then(() => c.xadd(STREAM, "*", "k", "v"))
+            .then(() => {
+                helper.load(
+                    redisNode,
+                    makeInFlow("xreadgroup", `${STREAM}:>`, true, {
+                        timeout: 0,
+                        groupname: GROUP,
+                        consumername: "consumer-1",
+                    }),
+                    function () {
+                        const h = helper.getNode("h");
+                        const giveUp = setTimeout(function () {
+                            Redis.prototype.xreadgroup = originalXreadgroup;
+                            c.disconnect();
+                            done(new Error("no message received — xreadgroup loop did not recover"));
+                        }, 4000);
+
+                        h.on("input", function (msg) {
+                            clearTimeout(giveUp);
+                            Redis.prototype.xreadgroup = originalXreadgroup;
+                            c.disconnect();
+                            try {
+                                msg.payload.k.should.equal("v");
+                                done();
+                            } catch (e) { done(e); }
+                        });
+                    }
+                );
+            })
+            .catch((e) => {
+                Redis.prototype.xreadgroup = originalXreadgroup;
+                c.disconnect();
+                done(e);
+            });
+    });
+
+    it("blpop — stops cleanly when the node closes during a retry backoff", function (done) {
+        const originalBlpop = Redis.prototype.blpop;
+        // Always reject so the loop stays in the retry/backoff cycle.
+        Redis.prototype.blpop = function () {
+            return Promise.reject(new Error("Connection is closed."));
+        };
+
+        helper.load(redisNode, makeInFlow("blpop", "test:in:recover:close", false), function () {
+            // Let the loop fail at least once and enter a backoff wait, then unload.
+            setTimeout(function () {
+                helper.unload()
+                    .then(function () { Redis.prototype.blpop = originalBlpop; done(); })
+                    .catch(function (e) { Redis.prototype.blpop = originalBlpop; done(e); });
+            }, 300);
         });
     });
 });
