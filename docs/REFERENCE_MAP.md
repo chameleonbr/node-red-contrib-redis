@@ -58,7 +58,7 @@ Deployment topology coverage:
 
 - `../test/redis_cluster_deployment_spec.js` — Redis Cluster auth, same-slot/cross-slot behavior, pub/sub, blocking list, Lua fallback, Redis 7.2 cluster-prone commands
 - `../test/redis_sentinel_deployment_spec.js` — Sentinel discovery/auth, pub/sub, blocking list, Lua, failover/reconnect, Redis 7.2 cluster-prone commands
-- `../test/memorydb_deployment_spec.js` — opt-in AWS MemoryDB cluster/auth, same-slot/cross-slot, Lua, and Redis 7.2 cluster-prone command coverage
+- `../test/memorydb_deployment_spec.js` — opt-in AWS MemoryDB cluster/auth (JSON and env-var optionsType), same-slot/cross-slot, Lua, and Redis 7.2 cluster-prone command coverage
 
 Browser editor coverage:
 

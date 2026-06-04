@@ -41,6 +41,17 @@ function memoryDbConfigNode() {
   };
 }
 
+function memoryDbEnvConfigNode(envName) {
+  return {
+    id: "config1",
+    type: "redis-config",
+    name: "AWS MemoryDB (env)",
+    options: envName,
+    optionsType: "env",
+    cluster: true,
+  };
+}
+
 function directMemoryDb() {
   return new Redis.Cluster(memoryDbNodeOptions(), {
     dnsLookup: (address, callback) => callback(null, address),
@@ -171,6 +182,54 @@ describeMemoryDb("AWS MemoryDB deployment", function () {
         payload: ["test:memorydb:{basic}:one", "test:memorydb:{basic}:two"],
       })
     ).should.be.a.Number();
+  });
+
+  it("authenticates with env-var optionsType (cluster options JSON read from an env var)", async function () {
+    const ENV_NAME = "AWS_MEMORYDB_OPTIONS_JSON";
+    const original = process.env[ENV_NAME];
+    process.env[ENV_NAME] = JSON.stringify(memoryDbNodeOptions());
+    try {
+      await load(helper, redisNode, [
+        memoryDbEnvConfigNode(ENV_NAME),
+        commandNode("ping-env", "PING"),
+        helperNode("ping-env"),
+        commandNode("acl-env", "ACL"),
+        helperNode("acl-env"),
+        commandNode("set-env", "SET"),
+        helperNode("set-env"),
+        commandNode("get-env", "GET"),
+        helperNode("get-env"),
+        commandNode("del-env", "DEL"),
+        helperNode("del-env"),
+      ]);
+
+      (await invoke(helper, "ping-env")).should.equal("PONG");
+      (await invoke(helper, "acl-env", { payload: ["WHOAMI"] })).should.equal(
+        process.env.MEMORYDB_USERNAME
+      );
+      (
+        await invoke(helper, "set-env", {
+          topic: "test:memorydb:{basic}:one",
+          payload: "env-value",
+        })
+      ).should.equal("OK");
+      (
+        await invoke(helper, "get-env", {
+          topic: "test:memorydb:{basic}:one",
+        })
+      ).should.equal("env-value");
+      (
+        await invoke(helper, "del-env", {
+          payload: ["test:memorydb:{basic}:one"],
+        })
+      ).should.be.a.Number();
+    } finally {
+      if (original === undefined) {
+        delete process.env[ENV_NAME];
+      } else {
+        process.env[ENV_NAME] = original;
+      }
+    }
   });
 
   it("runs same-slot cluster Lua through redis-lua-script", async function () {
