@@ -40,14 +40,14 @@
   ],
   "devDependencies": {
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.5",
+    "lint-staged": "^17.0.7",
     "mocha": "^11.7.6",
-    "node-red": "^4.1.10",
+    "node-red": "^4.1.11",
     "node-red-node-test-helper": "^0.3.6",
     "playwright": "^1.60.0",
     "prettier": "^3.8.3"
   },
   "dependencies": {
-    "ioredis": "^5.11.0"
+    "ioredis": "^5.11.1"
   }
 }
