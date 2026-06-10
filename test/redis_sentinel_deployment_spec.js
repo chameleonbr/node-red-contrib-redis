@@ -4,6 +4,7 @@ const helper = require("node-red-node-test-helper");
 const Redis = require("ioredis");
 const redisNode = require("../redis.js");
 const { commandNode, helperNode, invoke, load } = require("./helpers/topology");
+const { waitForNodeProp } = require("./helpers/wait");
 const { clusterProneFlow, runClusterProneSuccessCases } = require("./helpers/cluster-prone");
 
 helper.init(require.resolve("node-red"));
@@ -284,6 +285,145 @@ describeSentinel("Redis Sentinel auth deployment", function () {
         payload: ["test:sentinel:basic", "test:sentinel:lua"],
       })
     ).should.be.a.Number();
+  });
+
+  it("runs FCALL and read-only EVAL through Sentinel discovery", async function () {
+    const lib = [
+      "#!lua name=sentinellib",
+      "redis.register_function('sentinelfn', function(keys, args) redis.call('SET', keys[1], args[1]); return redis.call('GET', keys[1]) end)",
+    ].join("\n");
+    const flow = [
+      sentinelConfigNode(),
+      {
+        id: "fn-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "sentinel-fn",
+        mode: "function",
+        readonly: false,
+        keyval: 1,
+        func: lib,
+        fname: "sentinelfn",
+        block: false,
+        wires: [["fn-helper"]],
+      },
+      helperNode("fn"),
+      {
+        id: "ro-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "sentinel-ro",
+        mode: "script",
+        readonly: true,
+        stored: false,
+        keyval: 1,
+        func: "return redis.call('GET', KEYS[1])",
+        block: false,
+        wires: [["ro-helper"]],
+      },
+      helperNode("ro"),
+    ];
+
+    await load(helper, redisNode, flow);
+
+    const fnNode = helper.getNode("fn-node");
+    await waitForNodeProp(fnNode, "libname");
+    (await invoke(helper, "fn", { payload: ["test:sentinel:fn", "fn-value"] })).should.equal(
+      "fn-value"
+    );
+    // Seed via the function, then read it back read-only.
+    (await invoke(helper, "ro", { payload: ["test:sentinel:fn"] })).should.equal("fn-value");
+  });
+
+  it("runs block-mode (dedicated connection) Script and Function through Sentinel", async function () {
+    // The config carries an ioredis connectionName so the master's CLIENT LIST
+    // proves, server-side, that each block node opened its own connection
+    // while the non-block node uses the shared pooled one.
+    const CONN_NAME = "lua-block-sentinel";
+    const lib = [
+      "#!lua name=blocksentinellib",
+      "redis.register_function('blocksentinelfn', function(keys, args) redis.call('SET', keys[1], args[1]); return redis.call('GET', keys[1]) end)",
+    ].join("\n");
+    const namedConfig = {
+      id: "config1",
+      type: "redis-config",
+      name: "SentinelAuthNamed",
+      options: JSON.stringify(Object.assign(sentinelOptions(), { connectionName: CONN_NAME })),
+      optionsType: "json",
+      cluster: false,
+    };
+    const flow = [
+      namedConfig,
+      {
+        id: "shared-script-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "sentinel-shared-script",
+        mode: "script",
+        readonly: false,
+        stored: false,
+        keyval: 0,
+        func: "return 1",
+        block: false,
+        wires: [["shared-script-helper"]],
+      },
+      helperNode("shared-script"),
+      {
+        id: "blk-script-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "sentinel-block-script",
+        mode: "script",
+        readonly: false,
+        stored: false,
+        keyval: 1,
+        func: "redis.call('SET', KEYS[1], ARGV[1]); return redis.call('GET', KEYS[1])",
+        block: true,
+        wires: [["blk-script-helper"]],
+      },
+      helperNode("blk-script"),
+      {
+        id: "blk-fn-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "sentinel-block-fn",
+        mode: "function",
+        readonly: false,
+        keyval: 1,
+        func: lib,
+        fname: "blocksentinelfn",
+        block: true,
+        wires: [["blk-fn-helper"]],
+      },
+      helperNode("blk-fn"),
+    ];
+
+    await load(helper, redisNode, flow);
+
+    (await invoke(helper, "shared-script", { payload: [] })).should.equal(1);
+    (
+      await invoke(helper, "blk-script", { payload: ["test:sentinel:blk", "s-value"] })
+    ).should.equal("s-value");
+
+    const fnNode = helper.getNode("blk-fn-node");
+    await waitForNodeProp(fnNode, "libname");
+    (await invoke(helper, "blk-fn", { payload: ["test:sentinel:blkfn", "f-value"] })).should.equal(
+      "f-value"
+    );
+
+    // Server-side dedication proof on the discovered master.
+    const admin = directRedis();
+    try {
+      const list = await admin.client("list");
+      const named = list.split("\n").filter((line) => line.includes(` name=${CONN_NAME} `));
+      named.length.should.equal(
+        3,
+        `expected exactly 3 master connections named ${CONN_NAME} ` +
+          `(1 shared pool + 1 per block node), got ${named.length}:\n${named.join("\n")}`
+      );
+    } finally {
+      admin.disconnect();
+    }
   });
 
   it("supports pub/sub and blocking list input nodes", async function () {

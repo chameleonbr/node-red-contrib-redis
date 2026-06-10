@@ -2229,6 +2229,23 @@ string should pass them inside a non-empty array.</p>
         &rarr; <code>DBSIZE</code></li>
 </ul>
 
+<h3>Managing scripts and functions</h3>
+<p>This node is the home for Lua script-cache and Redis Functions management:
+<code>SCRIPT DEBUG/EXISTS/FLUSH/KILL/LOAD</code> and
+<code>FUNCTION DELETE/DUMP/FLUSH/KILL/LIST/LOAD/RESTORE/STATS</code>. Pick
+<code>SCRIPT</code> or <code>FUNCTION</code> as the command and put the subcommand and
+its arguments in <code>msg.payload</code>:</p>
+<ul>
+    <li><strong>SCRIPT LOAD:</strong> Command <code>SCRIPT</code>,
+        payload <code>["LOAD", "return 1"]</code> &rarr; returns the SHA1.</li>
+    <li><strong>FUNCTION LOAD:</strong> Command <code>FUNCTION</code>,
+        payload <code>["LOAD", "REPLACE", "#!lua name=mylib\nredis.register_function('f', function() return 1 end)"]</code></li>
+    <li><strong>FUNCTION LIST / STATS / FLUSH:</strong> Command <code>FUNCTION</code>,
+        payload <code>["LIST"]</code> / <code>["STATS"]</code> / <code>["FLUSH"]</code>.</li>
+</ul>
+<p>The <em>redis-lua-script</em> node handles execution (<code>EVAL</code>/<code>EVALSHA</code>/<code>FCALL</code>
+and their read-only variants).</p>
+
 <p>Full Redis command reference:
 <a href="https://redis.io/commands/" target="_blank">&#8599; redis.io/commands</a></p>
 </script>
@@ -2263,6 +2280,23 @@ string should pass them inside a non-empty array.</p>
             },
             block: {
                 value: false
+            },
+            mode: {
+                value: "script"
+            },
+            readonly: {
+                value: false
+            },
+            fname: {
+                value: "",
+                validate: function (v) {
+                    // Mandatory in Function mode. Reads the live select when the
+                    // editor is open, the saved value during flow validation.
+                    var mode = $("#node-input-mode").length
+                        ? $("#node-input-mode").val()
+                        : this.mode;
+                    return (mode || "script") !== "function" || /\S/.test(v || "");
+                }
             }
         },
         label: function () {
@@ -2273,6 +2307,88 @@ string should pass them inside a non-empty array.</p>
             $("#node-input-keyval").spinner({
                 min: 0
             });
+
+            // Fills the editor down to the bottom of the tray. Measures the
+            // real remaining space in the DOM (tray-body bottom minus the
+            // editor's top) because the height Node-RED passes to oneditresize
+            // and the form's own height both under-report it.
+            that.resizeLuaEditor = function () {
+                var editor = $("#node-input-func-editor");
+                if (!editor.length) {
+                    return;
+                }
+                var height;
+                var trayBody = editor.closest(".red-ui-tray-body");
+                if (trayBody.length) {
+                    height = trayBody[0].getBoundingClientRect().bottom
+                        - editor[0].getBoundingClientRect().top - 20;
+                } else {
+                    // Fallback for editors without the tray-body class: derive
+                    // from the size oneditresize received.
+                    var size = that._traySize;
+                    height = size && size.height ? size.height : $("#dialog-form").height();
+                    var rows = $("#dialog-form>div:not(.node-text-editor-row)");
+                    for (var i = 0; i < rows.length; i++) {
+                        height -= $(rows[i]).outerHeight(true);
+                    }
+                    var editorRow = $("#dialog-form>div.node-text-editor-row");
+                    height -= (parseInt(editorRow.css("marginTop")) + parseInt(editorRow.css("marginBottom")));
+                }
+                if (!(height > 150)) {
+                    height = 150; // never collapse the editor to a sliver
+                }
+                $(".node-text-editor").css("height", height + "px");
+                if (that.editor) {
+                    that.editor.resize();
+                }
+            };
+
+            // Starter templates. Switching mode only swaps the editor content
+            // while it is still pristine (the other mode's untouched template),
+            // so user-written code is never clobbered.
+            var SCRIPT_TEMPLATE = "\nreturn nil";
+            var FUNCTION_TEMPLATE = [
+                "#!lua name=mylib",
+                "",
+                "redis.register_function('myfunc', function(keys, args)",
+                "  return 'Hello, world!'",
+                "end)",
+            ].join("\n");
+
+            function seedTemplateForMode(isFunction) {
+                if (!that.editor) {
+                    return;
+                }
+                var current = that.editor.getValue().trim();
+                if (isFunction && (current === "" || current === SCRIPT_TEMPLATE.trim())) {
+                    that.editor.setValue(FUNCTION_TEMPLATE, -1);
+                    if (!/\S/.test($("#node-input-fname").val() || "")) {
+                        // trigger("change") makes Node-RED revalidate so the
+                        // required-field error styling clears immediately.
+                        $("#node-input-fname").val("myfunc").trigger("change");
+                    }
+                } else if (!isFunction && current === FUNCTION_TEMPLATE.trim()) {
+                    that.editor.setValue(SCRIPT_TEMPLATE, -1);
+                }
+            }
+
+            // Script mode shows the Stored checkbox; Function mode shows the
+            // Function name field and relabels the editor as the library source.
+            function updateLuaModeVisibility() {
+                var isFunction = $("#node-input-mode").val() === "function";
+                $("#redis-lua-fname-row").toggle(isFunction);
+                $("#redis-lua-stored-row").toggle(!isFunction);
+                $("#redis-lua-editor-label").text(isFunction ? "Lua Library" : "Lua Script");
+                seedTemplateForMode(isFunction);
+                // Showing/hiding rows changes the space left for the editor.
+                that.resizeLuaEditor();
+            }
+            // Nodes saved before the mode field existed (or with a cleared value)
+            // must open as Script mode.
+            $("#node-input-mode").val(this.mode === "function" ? "function" : "script");
+            $("#node-input-mode").on("change", updateLuaModeVisibility);
+            updateLuaModeVisibility();
+
             this.editor = RED.editor.createEditor({
                 id: 'node-input-func-editor',
                 mode: 'ace/mode/lua',
@@ -2287,10 +2403,24 @@ string should pass them inside a non-empty array.</p>
                 fields: [
                     'name',
                     'keyval',
+                    'fname',
+                    {
+                        name: 'mode',
+                        get: function() { return $("#node-input-mode").val(); },
+                        set: function(val) {
+                            $("#node-input-mode").val(val || "script");
+                            updateLuaModeVisibility();
+                        }
+                    },
                     {
                         name: 'stored',
                         get: function() { return $("#node-input-stored").is(":checked") ? "true" : "false"; },
                         set: function(val) { $("#node-input-stored").prop("checked", val === "true"); }
+                    },
+                    {
+                        name: 'readonly',
+                        get: function() { return $("#node-input-readonly").is(":checked") ? "true" : "false"; },
+                        set: function(val) { $("#node-input-readonly").prop("checked", val === "true"); }
                     },
                     {
                         name: 'block',
@@ -2317,15 +2447,10 @@ string should pass them inside a non-empty array.</p>
             this.editor = null;
         },
         oneditresize: function (size) {
-            var rows = $("#dialog-form>div:not(.node-text-editor-row)");
-            var height = $("#dialog-form").height();
-            for (var i = 0; i < rows.length; i++) {
-                height -= $(rows[i]).outerHeight(true);
+            this._traySize = size;
+            if (this.resizeLuaEditor) {
+                this.resizeLuaEditor();
             }
-            var editorRow = $("#dialog-form>div.node-text-editor-row");
-            height -= (parseInt(editorRow.css("marginTop")) + parseInt(editorRow.css("marginBottom")));
-            $(".node-text-editor").css("height", height + "px");
-            this.editor.resize();
         }
     });
 </script>
@@ -2335,18 +2460,37 @@ string should pass them inside a non-empty array.</p>
         <label for="node-input-server"><i class="fa fa-globe"></i> Server</label>
         <input type="text" id="node-input-server" placeholder="Server">
     </div>
+    <!-- Flex keeps label + input + the injected library button on one line; the
+         100px label basis and 4px gap reproduce the standard form-row metrics
+         (inline-block 100px label + whitespace) so inputs stay column-aligned. -->
+    <div class="form-row" style="display:flex; align-items:center; flex-wrap:nowrap; column-gap:4px;">
+        <label for="node-input-name" style="flex:0 0 100px; margin-right:0;"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name" style="flex:1 1 auto; width:auto; min-width:50px;">
+    </div>
     <div class="form-row">
-        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-        <input type="text" id="node-input-name" placeholder="Name">
+        <label for="node-input-mode"><i class="fa fa-cogs"></i> Mode</label>
+        <select id="node-input-mode" style="width:auto;">
+            <option value="script">Script (EVAL / EVALSHA)</option>
+            <option value="function">Function (FCALL)</option>
+        </select>
     </div>
     <div class="form-row">
         <label for="node-input-keyval"><i class="fa fa-list-ol"></i> Keys</label>
         <input id="node-input-keyval" style="width: 60px; height: 1.7em;" value="0">
     </div>
-    <div class="form-row">
+    <div class="form-row" id="redis-lua-fname-row">
+        <label for="node-input-fname"><i class="fa fa-bolt"></i> Function</label>
+        <input type="text" id="node-input-fname" placeholder="registered function name (required)">
+    </div>
+    <div class="form-row" id="redis-lua-stored-row">
         <label>&nbsp;</label>
         <input type="checkbox" id="node-input-stored" style="display:inline-block; width:15px; vertical-align:baseline;">
         <label for="node-input-stored" style="width:auto; margin-left:4px;">Stored Script (EVALSHA)</label>
+    </div>
+    <div class="form-row">
+        <label>&nbsp;</label>
+        <input type="checkbox" id="node-input-readonly" style="display:inline-block; width:15px; vertical-align:baseline;">
+        <label for="node-input-readonly" style="width:auto; margin-left:4px;" title="Uses EVAL_RO / EVALSHA_RO / FCALL_RO">Read-only</label>
     </div>
     <div class="form-row">
         <label>&nbsp;</label>
@@ -2354,7 +2498,7 @@ string should pass them inside a non-empty array.</p>
         <label for="node-input-block" style="width:auto; margin-left:4px;">Block Commands (dedicated connection)</label>
     </div>
     <div class="form-row" style="margin-bottom: 0px;">
-        <label for="node-input-func"><i class="fa fa-code"></i> Lua Script</label>
+        <label for="node-input-func"><i class="fa fa-code"></i> <span id="redis-lua-editor-label">Lua Script</span></label>
         <input type="hidden" id="node-input-func" autofocus="autofocus">
         <input type="hidden" id="node-input-noerr">
     </div>
@@ -2364,9 +2508,10 @@ string should pass them inside a non-empty array.</p>
 </script>
 
 <script type="text/x-red" data-help-name="redis-lua-script">
-<p>Executes a Lua script atomically inside Redis using <code>EVAL</code> or
-<code>EVALSHA</code>. Because Redis runs the script in a single step, it is
-ideal for read-modify-write operations that must not be interrupted by other clients.</p>
+<p>Executes server-side Lua atomically. In <strong>Script</strong> mode it runs a Lua
+script body with <code>EVAL</code>/<code>EVALSHA</code> (or their read-only
+<code>_RO</code> variants); in <strong>Function</strong> mode it loads a Redis Functions
+library and calls a registered function with <code>FCALL</code>/<code>FCALL_RO</code>.</p>
 
 <h3>Inputs</h3>
 <dl class="message-properties">
@@ -2388,6 +2533,23 @@ ideal for read-modify-write operations that must not be interrupted by other cli
 <dl class="message-properties">
     <dt>Server</dt>
     <dd>The <em>redis-config</em> node that defines the connection.</dd>
+    <dt>Mode</dt>
+    <dd><strong>Script</strong> runs the Lua body in the editor. <strong>Function</strong>
+        treats the editor as a Redis Functions <em>library</em> source (must start with the
+        <code>#!lua name=&lt;lib&gt;</code> shebang and call <code>redis.register_function</code>);
+        the node runs <code>FUNCTION LOAD REPLACE</code> on deploy/reconnect and calls the
+        function named in <strong>Function</strong> with <code>FCALL</code>.</dd>
+    <dt>Read-only</dt>
+    <dd>Uses the read-only command variant: <code>EVAL_RO</code>/<code>EVALSHA_RO</code> in
+        Script mode, <code>FCALL_RO</code> in Function mode. Read-only functions must be
+        registered with the <code>no-writes</code> flag.</dd>
+    <dt>Function</dt>
+    <dd>(Function mode, <strong>required</strong>) The registered function name to invoke.
+        Both the library source and the function name are mandatory in Function mode; a
+        missing one is a configuration error and messages fail without contacting Redis.
+        Give each Function node a <em>unique</em> library name — two nodes sharing a
+        <code>#!lua name=&lt;lib&gt;</code> overwrite each other&rsquo;s library on every
+        (re)load.</dd>
     <dt>Stored Script</dt>
     <dd>When enabled, the script is pre-loaded into Redis with <code>SCRIPT LOAD</code>
         the first time the node deploys, and subsequent calls use <code>EVALSHA</code>
@@ -2405,6 +2567,11 @@ ideal for read-modify-write operations that must not be interrupted by other cli
     <dd>Forces a dedicated connection for this node instead of the shared pool.
         Recommended when the script may hold the connection for an extended period.</dd>
 </dl>
+
+<h3>Managing scripts and functions</h3>
+<p>This node only <em>executes</em> scripts and functions. All <code>SCRIPT</code> and
+<code>FUNCTION</code> management/admin subcommands run through the <em>redis-command</em>
+node — see its help for the subcommand list and payload examples.</p>
 
 <h3>Examples</h3>
 

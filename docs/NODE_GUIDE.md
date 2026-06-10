@@ -145,6 +145,8 @@ Use this node for:
 - commands not modeled by `redis-out`
 - Redis modules and advanced commands
 - stream command coverage already exercised in tests
+- `FUNCTION` and `SCRIPT` management subcommands (LOAD, LIST, FLUSH, EXISTS, KILL, …);
+  the `redis-lua-script` node only executes
 
 Read before editing:
 
@@ -157,12 +159,23 @@ Purpose:
 
 - execute Lua scripts against Redis
 
-Behavior:
+Behavior (command resolved from `mode` + `stored` + `readonly`):
 
-- unstored scripts use `EVAL`
-- stored scripts load with `SCRIPT LOAD`
-- stored scripts run via `EVALSHA`
-- `NOSCRIPT` falls back to `EVAL`
+| mode | stored | readonly | on ready | on input | recovery |
+|------|--------|----------|----------|----------|----------|
+| script | no | no | — | `EVAL` | — |
+| script | no | yes | — | `EVAL_RO` | — |
+| script | yes | no | `SCRIPT LOAD` | `EVALSHA` | `NOSCRIPT` → `EVAL` |
+| script | yes | yes | `SCRIPT LOAD` | `EVALSHA_RO` | `NOSCRIPT` → `EVAL_RO` |
+| function | n/a | no | `FUNCTION LOAD REPLACE` | `FCALL` | "function not found" → reload → retry once |
+| function | n/a | yes | `FUNCTION LOAD REPLACE` | `FCALL_RO` | "function not found" → reload → retry once |
+
+- Function mode treats the editor as a Redis Functions library source (`#!lua name=…`);
+  the node `FUNCTION LOAD REPLACE`s it on every connection `ready`, on all masters in
+  cluster mode, so an `FCALL` routed to any shard can resolve. An empty library source in
+  Function mode is a configuration error.
+- This node is execution-only. `FUNCTION *` and `SCRIPT *` management subcommands stay in
+  `redis-command`.
 
 Input expectations:
 
@@ -174,6 +187,11 @@ Critical editor behaviors:
 - library type must remain `lua`
 - extension must remain `.lua`
 - checkbox metadata for `stored` and `block` must use explicit get/set handling
+- `mode` uses get/set so Open Library re-applies field visibility; `fname` is mandatory in
+  Function mode (editor `validate` + runtime fail-fast)
+- switching a pristine node (untouched starter content) to Function mode seeds a working
+  `#!lua name=…` + `redis.register_function` template and pre-fills the function name;
+  user-edited code is never replaced
 
 Read before editing:
 
@@ -225,6 +243,8 @@ Use existing example flows as the first source of user-facing patterns:
 - pattern subscription
 - set/get
 - Lua script
+- Redis Functions (`FCALL`)
+- `FUNCTION`/`SCRIPT` management via `redis-command`
 - streams
 
 If a new feature is hard to discover, add or update one example flow.

@@ -102,9 +102,11 @@ scripts."
    script cache, because the cached SHA1 is gone.
 2. Locate: `RedisLua` input handler in `../redis.js`; matching coverage in
    `../test/scripting_commands_spec.js` and `../test/redis_status_spec.js`.
-3. Narrow change: in the `evalsha` error callback, detect `NOSCRIPT` and fall back to
-   `runWithEval()`, which resends the body and re-caches it under the same SHA1. No new
-   fields, no connection changes.
+3. Narrow change: in the stored-script branch of the input handler, catch the `EVALSHA`
+   rejection, detect the `NOSCRIPT` error prefix, and fall back to the matching `EVAL`
+   variant, which resends the body and re-caches it under the same SHA1 (today this is the
+   `try`/`catch` around `client[evalshaCmd](...)` in `RedisLua`). No new fields, no
+   connection changes.
 4. Verify: targeted scripting spec, then `npm test`; confirm status/shutdown unaffected.
 
 Notice what it did **not** do: no refactor of the connection logic, no renamed fields, no

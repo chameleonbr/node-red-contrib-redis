@@ -214,6 +214,12 @@ test.describe("Node-RED Redis editor", () => {
     await page.locator("#node-input-block").setChecked(true);
     await setCodeEditorValue(page, "node-input-func-editor", "return redis.call('PING')");
 
+    await page.selectOption("#node-input-mode", "function");
+    await expect(page.locator("#redis-lua-fname-row")).toBeVisible();
+    await expect(page.locator("#redis-lua-stored-row")).toBeHidden();
+    await setInputValue(page, "#node-input-fname", "demofn");
+    await page.locator("#node-input-readonly").setChecked(true);
+
     await page.locator("#node-input-lua-lookup").click();
     await page.locator("#node-input-lua-menu-save-library").click();
     await expect(page.locator("#red-ui-library-dialog-save")).toBeVisible();
@@ -241,7 +247,110 @@ test.describe("Node-RED Redis editor", () => {
     expect(saved).toContain("// keyval: 2");
     expect(saved).toContain("// stored: true");
     expect(saved).toContain("// block: true");
+    expect(saved).toContain("// mode: function");
+    expect(saved).toContain("// readonly: true");
+    expect(saved).toContain("// fname: demofn");
     expect(saved).toContain("return redis.call('PING')");
+  });
+
+  test("redis-lua-script fresh node gets a library template when switched to Function mode", async ({
+    page,
+  }) => {
+    nodeRed = await startNodeRed(noauthOptions());
+    await openEditor(page, nodeRed.url);
+    // A freshly dropped node: all defaults, script-mode starter content.
+    await page.evaluate(() => {
+      RED.nodes.import(
+        [
+          {
+            id: "lua-fresh",
+            type: "redis-lua-script",
+            z: "flow1",
+            server: "redis-config-1",
+            name: "",
+            keyval: 0,
+            func: "\nreturn nil",
+            stored: false,
+            block: false,
+            mode: "script",
+            readonly: false,
+            fname: "",
+            wires: [[]],
+            x: 250,
+            y: 200,
+          },
+        ],
+        { markChanged: true }
+      );
+      RED.view.redraw(true);
+      RED.editor.edit(RED.nodes.node("lua-fresh"));
+    });
+
+    await page.waitForSelector("#node-input-func-editor", { state: "visible" });
+    await page.selectOption("#node-input-mode", "function");
+
+    // The pristine script template is replaced by a working library template
+    // and the function name is pre-filled to match it.
+    await expect(page.locator("#node-input-fname")).toHaveValue("myfunc");
+
+    await page.getByRole("button", { name: "Done", exact: true }).click();
+    const savedFunc = await page.evaluate(() => RED.nodes.node("lua-fresh").func);
+    expect(savedFunc).toContain("#!lua name=");
+    expect(savedFunc).toContain("redis.register_function");
+  });
+
+  test("redis-lua-script editor toggles function-mode fields with the mode select", async ({
+    page,
+  }) => {
+    nodeRed = await startNodeRed(noauthOptions());
+    await openEditor(page, nodeRed.url);
+    await page.evaluate(() => {
+      RED.nodes.import(
+        [
+          {
+            id: "lua-fn",
+            type: "redis-lua-script",
+            z: "flow1",
+            server: "redis-config-1",
+            name: "",
+            keyval: 1,
+            func: "#!lua name=demolib\nredis.register_function('demofn', function(keys, args) return redis.call('GET', keys[1]) end)",
+            stored: false,
+            block: false,
+            mode: "function",
+            readonly: false,
+            fname: "demofn",
+            wires: [[]],
+            x: 250,
+            y: 200,
+          },
+        ],
+        { markChanged: true }
+      );
+      RED.view.redraw(true);
+      RED.editor.edit(RED.nodes.node("lua-fn"));
+    });
+
+    await page.waitForSelector("#node-input-func-editor", { state: "visible" });
+
+    // A saved Function-mode node opens with the function fields shown and the
+    // stored checkbox hidden — oneditprepare applies visibility from saved state.
+    await expect(page.locator("#node-input-mode")).toHaveValue("function");
+    await expect(page.locator("#node-input-fname")).toHaveValue("demofn");
+    await expect(page.locator("#redis-lua-fname-row")).toBeVisible();
+    await expect(page.locator("#redis-lua-stored-row")).toBeHidden();
+    await expect(page.locator("#redis-lua-editor-label")).toHaveText("Lua Library");
+
+    // Switching to Script mode flips visibility (Stored shown, Function hidden)...
+    await page.selectOption("#node-input-mode", "script");
+    await expect(page.locator("#redis-lua-stored-row")).toBeVisible();
+    await expect(page.locator("#redis-lua-fname-row")).toBeHidden();
+    await expect(page.locator("#redis-lua-editor-label")).toHaveText("Lua Script");
+
+    // ...and switching back to Function mode flips it again.
+    await page.selectOption("#node-input-mode", "function");
+    await expect(page.locator("#redis-lua-fname-row")).toBeVisible();
+    await expect(page.locator("#redis-lua-stored-row")).toBeHidden();
   });
 
   test("redis-in editor toggles command-specific fields", async ({ page }) => {

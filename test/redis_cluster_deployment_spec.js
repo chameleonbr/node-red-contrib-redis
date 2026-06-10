@@ -4,6 +4,7 @@ const helper = require("node-red-node-test-helper");
 const Redis = require("ioredis");
 const redisNode = require("../redis.js");
 const { commandNode, expectError, helperNode, invoke, load } = require("./helpers/topology");
+const { waitForNodeProp } = require("./helpers/wait");
 const {
   clusterProneFlow,
   runClusterProneCrossSlotFailures,
@@ -79,27 +80,13 @@ function commandFlow(defs) {
   return flow;
 }
 
-function waitForLuaSha(node) {
-  return new Promise((resolve, reject) => {
-    const started = Date.now();
-    const tick = () => {
-      if (node.sha1 && node.sha1.length === 40) {
-        resolve();
-      } else if (Date.now() - started > 5000) {
-        reject(new Error("stored Lua script was not loaded"));
-      } else {
-        setTimeout(tick, 25);
-      }
-    };
-    tick();
-  });
-}
-
 async function loadScriptOnCluster(script) {
   const client = directCluster();
   try {
     await client.ping();
-    const shas = await Promise.all(client.nodes("master").map((node) => node.script("load", script)));
+    const shas = await Promise.all(
+      client.nodes("master").map((node) => node.script("load", script))
+    );
     return shas[0];
   } finally {
     client.disconnect();
@@ -365,7 +352,7 @@ describeCluster("Redis Cluster auth deployment", function () {
     result.should.eql(["payload", "2", "member"]);
 
     const storedNode = helper.getNode("stored-node");
-    await waitForLuaSha(storedNode);
+    await waitForNodeProp(storedNode, "sha1");
     (
       await invoke(helper, "stored", {
         payload: ["test:cluster:{lua}:stored-counter"],
@@ -384,5 +371,114 @@ describeCluster("Redis Cluster auth deployment", function () {
         payload: ["test:cluster:{lua}:stored-counter"],
       })
     ).should.equal(2);
+  });
+
+  it("runs same-slot FCALL and read-only EVAL through the function/RO models", async function () {
+    const lib = [
+      "#!lua name=clusterlib",
+      "redis.register_function('clusterfn', function(keys, args) redis.call('SET', keys[1], args[1]); return redis.call('GET', keys[1]) end)",
+    ].join("\n");
+    const flow = [
+      clusterConfigNode(),
+      {
+        id: "fn-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "cluster-fn",
+        mode: "function",
+        readonly: false,
+        keyval: 1,
+        func: lib,
+        fname: "clusterfn",
+        block: false,
+        wires: [["fn-helper"]],
+      },
+      helperNode("fn"),
+      {
+        id: "ro-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "cluster-ro",
+        mode: "script",
+        readonly: true,
+        stored: false,
+        keyval: 1,
+        func: "return redis.call('GET', KEYS[1])",
+        block: false,
+        wires: [["ro-helper"]],
+      },
+      helperNode("ro"),
+    ];
+
+    await load(helper, redisNode, flow);
+
+    const fnNode = helper.getNode("fn-node");
+    await waitForNodeProp(fnNode, "libname");
+    (await invoke(helper, "fn", { payload: ["test:cluster:{lua}:fn", "fn-value"] })).should.equal(
+      "fn-value"
+    );
+
+    const cluster = directCluster();
+    try {
+      await cluster.set("test:cluster:{lua}:ro", "ro-value");
+    } finally {
+      cluster.disconnect();
+    }
+    (await invoke(helper, "ro", { payload: ["test:cluster:{lua}:ro"] })).should.equal("ro-value");
+  });
+
+  it("runs block-mode (dedicated connection) Script and Function on the cluster", async function () {
+    // Execution-level coverage only: the server-side dedicated-connection proof
+    // (CLIENT LIST counting by connectionName) lives in scripting_commands_spec
+    // and the sentinel spec — the cluster config path cannot carry an ioredis
+    // connectionName, and the block/shared connection keying in RedisLua is
+    // topology-independent.
+    const lib = [
+      "#!lua name=blockclusterlib",
+      "redis.register_function('blockclusterfn', function(keys, args) redis.call('SET', keys[1], args[1]); return redis.call('GET', keys[1]) end)",
+    ].join("\n");
+    const flow = [
+      clusterConfigNode(),
+      {
+        id: "blk-script-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "cluster-block-script",
+        mode: "script",
+        readonly: false,
+        stored: false,
+        keyval: 1,
+        func: "redis.call('SET', KEYS[1], ARGV[1]); return redis.call('GET', KEYS[1])",
+        block: true,
+        wires: [["blk-script-helper"]],
+      },
+      helperNode("blk-script"),
+      {
+        id: "blk-fn-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "cluster-block-fn",
+        mode: "function",
+        readonly: false,
+        keyval: 1,
+        func: lib,
+        fname: "blockclusterfn",
+        block: true,
+        wires: [["blk-fn-helper"]],
+      },
+      helperNode("blk-fn"),
+    ];
+
+    await load(helper, redisNode, flow);
+
+    (
+      await invoke(helper, "blk-script", { payload: ["test:cluster:{lua}:blk", "s-value"] })
+    ).should.equal("s-value");
+
+    const fnNode = helper.getNode("blk-fn-node");
+    await waitForNodeProp(fnNode, "libname");
+    (
+      await invoke(helper, "blk-fn", { payload: ["test:cluster:{lua}:blkfn", "f-value"] })
+    ).should.equal("f-value");
   });
 });

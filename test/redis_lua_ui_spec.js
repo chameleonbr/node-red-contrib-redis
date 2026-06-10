@@ -127,6 +127,69 @@ describe("redis-lua-script UI template", function () {
     });
 });
 
+describe("redis-lua-script mode/readonly/fname fields", function () {
+    function luaDefaultsBody() {
+        const m = html.match(
+            /registerType\('redis-lua-script',[\s\S]*?defaults:\s*\{([\s\S]*?)\},\s*\n\s*label:/
+        );
+        return m ? m[1] : null;
+    }
+
+    it("registers mode, readonly, and fname in defaults", function () {
+        const defaults = luaDefaultsBody();
+        assert.ok(defaults !== null, "redis-lua-script defaults block should be present");
+        assert.match(defaults, /\bmode\s*:/, "defaults should include 'mode'");
+        assert.match(defaults, /\breadonly\s*:/, "defaults should include 'readonly'");
+        assert.match(defaults, /\bfname\s*:/, "defaults should include 'fname'");
+    });
+
+    it("seeds a function-library template when a pristine node switches to Function mode", function () {
+        const m = html.match(/registerType\('redis-lua-script',([\s\S]*?)\n<\/script>/);
+        assert.ok(m !== null, "redis-lua-script registerType block should be present");
+        const block = m[1];
+        assert.match(
+            block,
+            /#!lua name=/,
+            "the editor block must define a Function-mode template containing the #!lua shebang"
+        );
+        assert.match(
+            block,
+            /redis\.register_function/,
+            "the Function-mode template must register a function via redis.register_function"
+        );
+    });
+
+    it("declares fname as mandatory in Function mode (validate present)", function () {
+        const defaults = luaDefaultsBody();
+        assert.ok(defaults !== null, "redis-lua-script defaults block should be present");
+        assert.match(
+            defaults,
+            /fname\s*:\s*\{[\s\S]*?validate\s*:/,
+            "fname must carry a validate function so Function mode requires a function name"
+        );
+    });
+
+    it("template has a mode select, a read-only checkbox, and a function-name input", function () {
+        assert.match(html, /id="node-input-mode"/, "template should include #node-input-mode");
+        assert.match(html, /id="node-input-readonly"/, "template should include #node-input-readonly");
+        assert.match(html, /id="node-input-fname"/, "template should include #node-input-fname");
+    });
+
+    it("library.create persists mode (object), readonly (object), and fname (string)", function () {
+        const fieldsBody = extractFieldsBody(html);
+        assert.ok(fieldsBody !== null, "fields array should be present");
+        assert.ok(hasStringField(fieldsBody, "fname"), "fields should include 'fname' as a string field");
+        assert.ok(
+            hasObjectField(fieldsBody, "mode"),
+            "'mode' must be an object field with get/set so Open Library re-applies field visibility"
+        );
+        assert.ok(
+            hasObjectField(fieldsBody, "readonly"),
+            "'readonly' must be an object field with get/set returning the string \"true\"/\"false\""
+        );
+    });
+});
+
 describe("redis-config UI template", function () {
     it("opens saved environment-variable configs on the ConnString tab", function () {
         assert.match(

@@ -95,7 +95,8 @@ Respect ioredis constraints:
 - pub/sub connections enter subscriber mode
 - blocking commands can require dedicated connections
 - reconnect and shutdown behavior matter
-- Lua stored scripts can need reload/fallback handling
+- Lua stored scripts (NOSCRIPT→EVAL) and Redis Functions (FUNCTION LOAD→FCALL) need
+  reload/fallback handling; read-only variants are EVAL_RO/EVALSHA_RO/FCALL_RO
 
 ## Change heuristics
 
@@ -161,6 +162,10 @@ Be careful with:
 - library type name
 - file extension
 - checkbox persistence
+- the `mode` select / `readonly` flag / `fname` fields and their library round-trip
+  (`mode` needs a get/set so Open Library re-applies field visibility)
+- the cluster-aware `FUNCTION LOAD REPLACE` loader and the FCALL "function not found"
+  reload-and-retry recovery in `RedisLua`
 - DOM ids
 - stored vs unstored runtime behavior
 

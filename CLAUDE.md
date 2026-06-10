@@ -114,6 +114,14 @@ Use modern JavaScript, but keep compatibility with the current code style:
 - `let`/`const` inside runtime logic
 - explicit `done(err)` or `node.error(err, msg)` paths
 - avoid hidden control flow
+- **Always write asynchronous code with `async`/`await` + `try`/`catch` — in runtime
+  (`redis.js`) AND tests. Never use `.then()/.catch()` Promise chains, and never add
+  callback-style ioredis calls.** ioredis methods return a promise when called without a
+  callback (`const res = await client.eval(args)`; `await client.function("load", ...)`).
+  Node-RED handlers may be `async function (msg, send, done)`; surface errors with
+  `done(err)`. A single `new Promise(...)` wrapper to bridge an event/callback API
+  (e.g. `setTimeout`, `helper.stopServer`) and `await Promise.all([...])` for parallelism
+  are allowed — the thing to avoid is `.then(...).catch(...)` sequencing.
 
 ## Node-RED conventions
 
@@ -190,6 +198,7 @@ Read the matching code and tests before touching:
 - `xadd` payload normalization
 - `zadd` payload normalization
 - Lua stored-script library metadata and checkbox persistence
+- Lua Script vs Function mode, the read-only flag, and the cluster-aware FUNCTION LOAD/FCALL recovery
 - context storage in `redis-instance`
 - config option evaluation from typedInput / env / JSON / JSONata
 

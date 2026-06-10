@@ -126,12 +126,22 @@ Command-family coverage, all driving `redis-command` through `client.call`:
 
 - `bit_`, `geo_`, `hash_`, `hyperloglog_`, `key_`, `list_`, `scripting_`, `server_`,
   `set_`, `sorted_set_`, `stream_`, `string_commands_spec.js`
+- `scripting_commands_spec.js` additionally drives the `redis-lua-script` node directly for
+  read-only (`EVAL_RO`/`EVALSHA_RO`), Function mode (`FCALL`/`FCALL_RO`, reload recovery), and
+  block mode — including a server-side dedicated-connection proof that sets an ioredis
+  `connectionName` on the config and counts named connections via `CLIENT LIST`
+  (non-block nodes must pool onto one connection; each block node must add its own)
 
 Deployment topology coverage:
 
-- `redis_cluster_deployment_spec.js` — Redis Cluster auth, same-slot success, cross-slot failure, pub/sub, blocking list, Lua fallback, Redis 7.2 cluster-prone commands
-- `redis_sentinel_deployment_spec.js` — Sentinel discovery/auth, pub/sub, blocking list, Lua, failover/reconnect, Redis 7.2 cluster-prone commands
-- `memorydb_deployment_spec.js` — opt-in AWS MemoryDB cluster/auth (JSON and env-var optionsType)/same-slot/cross-slot/Lua and Redis 7.2 cluster-prone command coverage
+- `redis_cluster_deployment_spec.js` — Redis Cluster auth, same-slot success, cross-slot failure, pub/sub, blocking list, Lua fallback, same-slot FCALL + read-only Lua, block-mode Script/Function execution, Redis 7.2 cluster-prone commands
+- `redis_sentinel_deployment_spec.js` — Sentinel discovery/auth, pub/sub, blocking list, Lua, FCALL + read-only Lua, block-mode Script/Function with a `CLIENT LIST` dedicated-connection proof on the discovered master, failover/reconnect, Redis 7.2 cluster-prone commands
+- `memorydb_deployment_spec.js` — opt-in AWS MemoryDB cluster/auth (JSON and env-var optionsType)/same-slot/cross-slot/Lua, read-only Lua + FCALL and block-mode coverage (gated on engine function support), and Redis 7.2 cluster-prone command coverage
+
+The block-mode server-side proof (counting `CLIENT LIST` entries by `connectionName`) runs in
+the standalone and Sentinel specs only: the cluster config path cannot carry an ioredis
+`connectionName`, and the block/shared connection keying in `RedisLua` is topology-independent,
+so cluster and MemoryDB keep execution-level block coverage.
 
 Helpers:
 

@@ -59,9 +59,9 @@ Command-family coverage (all drive `redis-command` via `client.call`):
 
 Deployment topology coverage:
 
-- `../test/redis_cluster_deployment_spec.js` — Redis Cluster auth, same-slot/cross-slot behavior, pub/sub, blocking list, Lua fallback, Redis 7.2 cluster-prone commands
-- `../test/redis_sentinel_deployment_spec.js` — Sentinel discovery/auth, pub/sub, blocking list, Lua, failover/reconnect, Redis 7.2 cluster-prone commands
-- `../test/memorydb_deployment_spec.js` — opt-in AWS MemoryDB cluster/auth (JSON and env-var optionsType), same-slot/cross-slot, Lua, and Redis 7.2 cluster-prone command coverage
+- `../test/redis_cluster_deployment_spec.js` — Redis Cluster auth, same-slot/cross-slot behavior, pub/sub, blocking list, Lua fallback, same-slot FCALL + read-only Lua, Redis 7.2 cluster-prone commands
+- `../test/redis_sentinel_deployment_spec.js` — Sentinel discovery/auth, pub/sub, blocking list, Lua, FCALL + read-only Lua, failover/reconnect, Redis 7.2 cluster-prone commands
+- `../test/memorydb_deployment_spec.js` — opt-in AWS MemoryDB cluster/auth (JSON and env-var optionsType), same-slot/cross-slot, Lua, read-only Lua + FCALL (gated on engine function support), and Redis 7.2 cluster-prone command coverage
 
 Browser editor coverage:
 
@@ -89,6 +89,8 @@ Examples:
 
 - `../examples/redis-list-queue.json`
 - `../examples/redis-lua-script.json`
+- `../examples/redis-fcall.json`
+- `../examples/redis-script-function-management.json`
 - `../examples/redis-priority-queue.json`
 - `../examples/redis-psubscribe.json`
 - `../examples/redis-pub-sub.json`
@@ -143,11 +145,17 @@ Read:
 
 ### Lua
 
+`redis-lua-script` has two modes: Script (`EVAL`/`EVAL_RO`, stored `EVALSHA`/`EVALSHA_RO`
+with `NOSCRIPT` recovery) and Function (`FUNCTION LOAD REPLACE` on ready + `FCALL`/`FCALL_RO`,
+cluster-aware load on all masters, "function not found" reload-and-retry). Management
+(`FUNCTION *`/`SCRIPT *`) stays in `redis-command`.
+
 Read:
 
 - `../redis.js` `RedisLua`
 - `../redis.html` `redis-lua-script`
 - `../test/redis_lua_ui_spec.js`
+- `../test/scripting_commands_spec.js` for runtime read-only/function behavior
 - `../test/playwright/redis-editor.spec.js` for real editor/library behavior
 - `../test/redis_status_spec.js`
 
@@ -208,5 +216,9 @@ All four config-name keys use `this.server.name` — the **resolved** config nod
 id string, so `n.server.name` is `undefined`). `redis-lua-script` used `n.server.name` until
 a fix made it consistent with the others; the bug had all non-blocking Lua nodes collapse
 onto a single pool key `undefined` and share one client across different configs
-(regression test: `test/redis_lua_conn_spec.js`). Always confirm intent with a human before
-changing any id key — it underpins subscriber mode, blocking behavior, status, and shutdown.
+(regression test: `test/redis_lua_conn_spec.js`). The `block ? n.id : server.name` split for
+`redis-lua-script` is proven server-side: `test/scripting_commands_spec.js` and
+`test/redis_sentinel_deployment_spec.js` set an ioredis `connectionName` and count named
+`CLIENT LIST` entries (non-block nodes pool onto one connection; each block node adds its own).
+Always confirm intent with a human before changing any id key — it underpins subscriber mode,
+blocking behavior, status, and shutdown.

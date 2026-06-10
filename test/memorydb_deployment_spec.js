@@ -4,6 +4,7 @@ const helper = require("node-red-node-test-helper");
 const Redis = require("ioredis");
 const redisNode = require("../redis.js");
 const { commandNode, expectError, helperNode, invoke, load } = require("./helpers/topology");
+const { waitForNodeProp } = require("./helpers/wait");
 const {
   clusterProneFlow,
   clusterProneKeys,
@@ -72,6 +73,10 @@ async function cleanupMemoryDbKeys() {
     "test:memorydb:{basic}:one",
     "test:memorydb:{basic}:two",
     "test:memorydb:{lua}:counter",
+    "test:memorydb:{lua}:ro",
+    "test:memorydb:{lua}:fn",
+    "test:memorydb:{lua}:blk",
+    "test:memorydb:{lua}:blkfn",
   ].concat(clusterProneKeys("test:memorydb"));
   try {
     await Promise.all(keys.map((key) => client.del(key).catch(() => null)));
@@ -93,8 +98,22 @@ async function loadScriptOnMemoryDb(script) {
   const client = directMemoryDb();
   try {
     await client.ping();
-    const shas = await Promise.all(client.nodes("master").map((node) => node.script("load", script)));
+    const shas = await Promise.all(
+      client.nodes("master").map((node) => node.script("load", script))
+    );
     return shas[0];
+  } finally {
+    client.disconnect();
+  }
+}
+
+async function memoryDbSupportsFunctions() {
+  const client = directMemoryDb();
+  try {
+    await client.function("list");
+    return true;
+  } catch (err) {
+    return false;
   } finally {
     client.disconnect();
   }
@@ -182,6 +201,120 @@ describeMemoryDb("AWS MemoryDB deployment", function () {
         payload: ["test:memorydb:{basic}:one", "test:memorydb:{basic}:two"],
       })
     ).should.be.a.Number();
+  });
+
+  it("runs read-only EVAL and (when supported) FCALL", async function () {
+    const supportsFunctions = await memoryDbSupportsFunctions();
+
+    const flow = [
+      memoryDbConfigNode(),
+      {
+        id: "ro-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "memorydb-ro",
+        mode: "script",
+        readonly: true,
+        stored: false,
+        keyval: 1,
+        func: "return redis.call('GET', KEYS[1])",
+        block: false,
+        wires: [["ro-helper"]],
+      },
+      helperNode("ro"),
+    ];
+    // The read-only EVAL coverage always runs; only the FCALL portion is
+    // gated on engine support for Redis Functions.
+    if (supportsFunctions) {
+      flow.push({
+        id: "fn-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "memorydb-fn",
+        mode: "function",
+        readonly: false,
+        keyval: 1,
+        func: "#!lua name=memorydblib\nredis.register_function('memorydbfn', function(keys, args) redis.call('SET', keys[1], args[1]); return redis.call('GET', keys[1]) end)",
+        fname: "memorydbfn",
+        block: false,
+        wires: [["fn-helper"]],
+      });
+      flow.push(helperNode("fn"));
+    }
+
+    await load(helper, redisNode, flow);
+
+    const client = directMemoryDb();
+    try {
+      await client.set("test:memorydb:{lua}:ro", "ro-value");
+    } finally {
+      client.disconnect();
+    }
+    (await invoke(helper, "ro", { payload: ["test:memorydb:{lua}:ro"] })).should.equal("ro-value");
+
+    if (supportsFunctions) {
+      const fnNode = helper.getNode("fn-node");
+      await waitForNodeProp(fnNode, "libname");
+      (
+        await invoke(helper, "fn", { payload: ["test:memorydb:{lua}:fn", "fn-value"] })
+      ).should.equal("fn-value");
+    }
+  });
+
+  it("runs block-mode (dedicated connection) Script and (when supported) Function", async function () {
+    // Execution-level coverage only: the server-side dedicated-connection proof
+    // (CLIENT LIST counting by connectionName) lives in scripting_commands_spec
+    // and the sentinel spec — the cluster-style config path cannot carry an
+    // ioredis connectionName, and counting clients on shared AWS infrastructure
+    // would be unreliable anyway.
+    const supportsFunctions = await memoryDbSupportsFunctions();
+    const flow = [
+      memoryDbConfigNode(),
+      {
+        id: "blk-script-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "memorydb-block-script",
+        mode: "script",
+        readonly: false,
+        stored: false,
+        keyval: 1,
+        func: "redis.call('SET', KEYS[1], ARGV[1]); return redis.call('GET', KEYS[1])",
+        block: true,
+        wires: [["blk-script-helper"]],
+      },
+      helperNode("blk-script"),
+    ];
+    if (supportsFunctions) {
+      flow.push({
+        id: "blk-fn-node",
+        type: "redis-lua-script",
+        server: "config1",
+        name: "memorydb-block-fn",
+        mode: "function",
+        readonly: false,
+        keyval: 1,
+        func: "#!lua name=blockmemorydblib\nredis.register_function('blockmemorydbfn', function(keys, args) redis.call('SET', keys[1], args[1]); return redis.call('GET', keys[1]) end)",
+        fname: "blockmemorydbfn",
+        block: true,
+        wires: [["blk-fn-helper"]],
+      });
+      flow.push(helperNode("blk-fn"));
+    }
+
+    await load(helper, redisNode, flow);
+
+    (
+      await invoke(helper, "blk-script", { payload: ["test:memorydb:{lua}:blk", "s-value"] })
+    ).should.equal("s-value");
+
+    if (supportsFunctions) {
+      const fnNode = helper.getNode("blk-fn-node");
+      await waitForNodeProp(fnNode, "libname");
+      (
+        await invoke(helper, "blk-fn", { payload: ["test:memorydb:{lua}:blkfn", "f-value"] })
+      ).should.equal("f-value");
+    }
   });
 
   it("authenticates with env-var optionsType (cluster options JSON read from an env var)", async function () {
