@@ -2,7 +2,7 @@
 
 Shared entry point for AI coding agents. `AGENTS.md` is a symlink to this file, so Claude and Codex read the same guidance.
 
-This project is a Node-RED custom node package implemented in JavaScript ES6+ with Node.js v24 as the working runtime target, Node-RED v4.1.10 as the editor/runtime target, and ioredis v5.11.0 as the Redis client.
+This project is a Node-RED custom node package implemented in JavaScript ES6+ with Node.js v24 as the working runtime target, Node-RED v5.0.0 as the editor/runtime target, and ioredis v5.11.1 as the Redis client.
 The package registers one Node-RED module entrypoint in `package.json` and is implemented primarily in `redis.js` and `redis.html`.
 
 ## Agents & entry points

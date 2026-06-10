@@ -42,7 +42,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.0.7",
     "mocha": "^11.7.6",
-    "node-red": "^4.1.11",
+    "node-red": "^5.0.0",
     "node-red-node-test-helper": "^0.3.6",
     "playwright": "^1.60.0",
     "prettier": "^3.8.3"

@@ -225,6 +225,14 @@ Be careful with:
 
 ## Editor guidance
 
+Node icon (`icons/redis-logo.png`):
+
+- the workspace renders **SVG icons at the full 30px box** but scales raster icons to
+  ≤20px and centers them — so the icon must stay a high-resolution PNG (512px) to match
+  the palette's look; the vector source lives at `docs/assets/redis-logo.svg`
+- never place a same-named `.svg` next to the `.png` in `icons/` — Node-RED serves the
+  SVG in preference, silently reintroducing the oversized workspace icon
+
 When adding fields in `redis.html`:
 
 - use stable `defaults` names
