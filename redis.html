@@ -1,6 +1,254 @@
+<style>
+    .redis-config-tabs-row {
+        margin-bottom: 18px;
+    }
+    #node-config-redis-tabs {
+        box-sizing: border-box;
+        width: 100%;
+    }
+    #node-config-redis-tabs-content {
+        min-height: 380px;
+    }
+    #redis-config-tab-connection,
+    #redis-config-tab-options {
+        box-sizing: border-box;
+        min-height: 380px;
+        height: 100%;
+        padding-bottom: 58px;
+        position: relative;
+    }
+    .redis-config-mode-section,
+    .redis-config-provider-section {
+        display: none;
+    }
+    .redis-config-mode-section.redis-config-active-section,
+    .redis-config-provider-section.redis-config-active-section {
+        display: block;
+    }
+    .redis-config-small-input {
+        width: 90px !important;
+    }
+    .redis-config-mode-select {
+        width: 155px !important;
+    }
+    .redis-config-options-type-select {
+        width: 180px !important;
+    }
+    .redis-config-provider-select {
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: calc(100% - 110px);
+    }
+    .redis-config-input {
+        width: calc(100% - 110px) !important;
+    }
+    .redis-config-half-input {
+        width: calc((100% - 110px) / 2) !important;
+    }
+    .redis-config-wide-input {
+        width: calc(100% - 300px) !important;
+    }
+    .redis-config-secondary-label {
+        margin-left: 20px;
+        width: 76px !important;
+    }
+    .redis-config-checkbox {
+        display: inline-block !important;
+        width: 15px !important;
+        height: 15px !important;
+        margin: 0 5px 0 0 !important;
+        vertical-align: -2px !important;
+    }
+    .redis-config-list-row input {
+        box-sizing: border-box;
+    }
+    .redis-config-list-panel {
+        display: inline-block;
+        width: calc(100% - 110px);
+        min-height: 136px;
+        vertical-align: top;
+    }
+    .redis-config-list-panel ol {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        min-height: 136px;
+    }
+    .redis-config-list-header,
+    .redis-config-list-fields {
+        display: grid;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+    }
+    .redis-config-list-header {
+        margin-bottom: 4px;
+        color: var(--red-ui-secondary-text-color, #666);
+        font-size: 12px;
+    }
+    .redis-config-list-header span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .redis-config-list-header-basic,
+    .redis-config-list-fields-basic {
+        grid-template-columns: minmax(0, 1fr) 76px;
+    }
+    .redis-config-list-header-auth,
+    .redis-config-list-fields-auth {
+        grid-template-columns: minmax(0, 1.2fr) 76px minmax(0, 0.8fr) minmax(0, 0.8fr) 34px;
+    }
+    .redis-config-list-header-auth {
+        box-sizing: border-box;
+        padding-right: 34px;
+        position: relative;
+    }
+    .redis-config-list-row input[type="text"],
+    .redis-config-list-row input[type="number"],
+    .redis-config-list-row input[type="password"] {
+        width: 100% !important;
+    }
+    .redis-config-list-tls {
+        text-align: center;
+        white-space: nowrap;
+    }
+    .redis-config-list-tls-heading {
+        text-align: center;
+    }
+    .redis-config-list-delete-heading {
+        display: block;
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 28px;
+        height: 20px;
+    }
+    .redis-config-list-tls .redis-config-checkbox {
+        margin-right: 0 !important;
+    }
+    .redis-config-pw-wrap {
+        display: inline-flex;
+        align-items: center;
+        width: calc(100% - 110px);
+        vertical-align: middle;
+    }
+    .redis-config-pw-wrap input {
+        flex: 1 !important;
+        min-width: 0;
+        width: auto !important;
+    }
+    .redis-config-editor-row {
+        position: relative;
+        height: 260px;
+    }
+    #redis-config-options-editor {
+        position: absolute;
+        inset: 0;
+        border: 1px solid var(--red-ui-form-input-border-color, #ccc);
+        border-radius: 4px;
+    }
+    .redis-config-test-row {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        margin: 0;
+        padding-left: 0;
+    }
+    .redis-config-test-message {
+        flex: 1;
+        color: var(--red-ui-secondary-text-color, #666);
+        text-align: right;
+    }
+    .redis-config-test-message.redis-config-success {
+        color: var(--red-ui-form-input-success-color, #238823);
+    }
+    .redis-config-test-message.redis-config-error {
+        color: var(--red-ui-form-input-error-color, #c00);
+    }
+    .redis-config-test-button {
+        flex: 0 0 auto;
+        order: 2;
+    }
+    .redis-config-raw-help {
+        margin-left: 104px;
+        color: var(--red-ui-secondary-text-color, #666);
+        font-size: 12px;
+        line-height: 1.4em;
+    }
+    .redis-config-inline-message {
+        margin-left: 10px;
+        color: var(--red-ui-secondary-text-color, #666);
+    }
+    .redis-config-inline-message.redis-config-error {
+        color: var(--red-ui-form-input-error-color, #c00);
+    }
+</style>
+
 <script type="text/javascript">
     "use strict";
     /*global RED*/
+    // Secret extract/merge for redis-config. MUST stay in sync with the copy in
+    // redis.js (runtime): same paths — single/sentinel `password`, sentinel
+    // `sentinelPassword`, cluster per-node `nodes[i]`.
+    function extractSecrets(options) {
+        var secrets = {};
+        if (Array.isArray(options)) {
+            var pws = options.map(function (node) {
+                return node && node.password ? node.password : "";
+            });
+            if (pws.some(function (p) { return p; })) { secrets.nodes = pws; }
+            var strippedNodes = options.map(function (node) {
+                var copy = Object.assign({}, node);
+                delete copy.password;
+                return copy;
+            });
+            return { stripped: strippedNodes, secrets: secrets };
+        }
+        if (options && typeof options === "object") {
+            var stripped = Object.assign({}, options);
+            if (Array.isArray(options.sentinels)) {
+                if (options.password) { secrets.password = options.password; }
+                if (options.sentinelPassword) { secrets.sentinelPassword = options.sentinelPassword; }
+                delete stripped.password;
+                delete stripped.sentinelPassword;
+            } else {
+                if (options.password) { secrets.password = options.password; }
+                delete stripped.password;
+            }
+            return { stripped: stripped, secrets: secrets };
+        }
+        return { stripped: options, secrets: secrets };
+    }
+    function mergeSecrets(options, secrets) {
+        if (!secrets || typeof secrets !== "object") { return options; }
+        if (Array.isArray(options)) {
+            if (Array.isArray(secrets.nodes)) {
+                secrets.nodes.forEach(function (pw, i) {
+                    if (pw && options[i]) { options[i].password = pw; }
+                });
+            }
+            return options;
+        }
+        if (options && typeof options === "object") {
+            if (Array.isArray(options.sentinels)) {
+                if (secrets.password) { options.password = secrets.password; }
+                if (secrets.sentinelPassword) { options.sentinelPassword = secrets.sentinelPassword; }
+            } else if (secrets.password) {
+                options.password = secrets.password;
+            }
+        }
+        return options;
+    }
+    function parseSecrets(value) {
+        if (!value) { return {}; }
+        try { return JSON.parse(value) || {}; } catch (e) { return {}; }
+    }
     RED.nodes.registerType('redis-config', {
         category: 'config',
         defaults: {
@@ -11,7 +259,7 @@
             options: {
                 value: "{}",
                 required: true,
-                validate: RED.validators.typedInput("optionsType"),
+                validate: RED.validators.typedInput("optionsType", true),
 
             },
             cluster: {
@@ -19,34 +267,983 @@
             },
             optionsType: { value: "json" }
         },
+        credentials: {
+            secrets: { type: "text" }
+        },
         label: function () {
             return this.name || "Redis host";
         },
         oneditprepare: function () {
-            $("#node-config-input-options").typedInput({
-                default: 'str',
-                typeField: "#node-config-input-optionsType",
-                types: ['str', 'env', 'json', 'jsonata']
+            var node = this;
+            var isSyncing = false;
+            var optionsEditor = null;
+            var lastEnvOptions = this.optionsType === "env" ? ($("#node-config-input-options").val() || "") : "";
+            var redisConfigTabs = RED.tabs.create({
+                id: "node-config-redis-tabs",
+                onchange: function(tab) {
+                    $("#node-config-redis-tabs-content").children().hide();
+                    $("#" + tab.id).show();
+                    resizeConfigLayout();
+                    if (optionsEditor) {
+                        setTimeout(function() {
+                            optionsEditor.resize();
+                        }, 0);
+                    }
+                }
+            });
+            redisConfigTabs.addTab({
+                id: "redis-config-tab-connection",
+                label: "Connection"
+            });
+            redisConfigTabs.addTab({
+                id: "redis-config-tab-options",
+                label: "ConnString"
             });
 
+            function asNumber(value, fallback) {
+                if (value === undefined || value === null || value === "") {
+                    return fallback;
+                }
+                var parsed = Number(value);
+                return Number.isNaN(parsed) ? fallback : parsed;
+            }
+
+            function parseEndpoint(value, defaultPort) {
+                var endpoint = (value || "").trim();
+                if (!endpoint) {
+                    return {
+                        host: "",
+                        port: defaultPort
+                    };
+                }
+                var port = defaultPort;
+                var host = endpoint;
+                var bracketMatch = endpoint.match(/^\[([^\]]+)\](?::(\d+))?$/);
+                if (bracketMatch) {
+                    host = bracketMatch[1];
+                    if (bracketMatch[2]) {
+                        port = asNumber(bracketMatch[2], defaultPort);
+                    }
+                } else {
+                    var portMatch = endpoint.match(/^(.*):(\d+)$/);
+                    if (portMatch && portMatch[1].indexOf(":") === -1) {
+                        host = portMatch[1];
+                        port = asNumber(portMatch[2], defaultPort);
+                    }
+                }
+                return {
+                    host: host,
+                    port: port
+                };
+            }
+
+            function formatEndpoint(host, port) {
+                if (!host) {
+                    return "";
+                }
+                if (host.indexOf(":") !== -1 && host[0] !== "[") {
+                    return "[" + host + "]:" + port;
+                }
+                return host + ":" + port;
+            }
+
+            function parseJsonOptions() {
+                if (optionsEditor) {
+                    var editorValue = optionsEditor.getValue();
+                    if (editorValue && editorValue.trim()) {
+                        try {
+                            return JSON.parse(editorValue);
+                        } catch (ignore) {
+                            // Fall through to hidden field (e.g. AWS dnsLookup appended)
+                        }
+                    }
+                }
+                var optionsValue = $("#node-config-input-options").val();
+                if (!optionsValue) {
+                    return null;
+                }
+                try {
+                    return JSON.parse(optionsValue);
+                } catch (ignore) {
+                    return null;
+                }
+            }
+
+            function prettyOptions(value) {
+                return JSON.stringify(value, null, 2);
+            }
+
+            function setEditorValue(value) {
+                if (!optionsEditor) {
+                    return;
+                }
+                var cursor = optionsEditor.getCursorPosition();
+                optionsEditor.setValue(value, -1);
+                if (typeof optionsEditor.moveCursorToPosition === "function") {
+                    optionsEditor.moveCursorToPosition(cursor);
+                } else if (typeof optionsEditor.moveCursorTo === "function") {
+                    optionsEditor.moveCursorTo(cursor.row, cursor.column);
+                }
+            }
+
+            function hasTls(options) {
+                return !!(options && options.tls);
+            }
+
+            function applyOptionalConnectionOptions(target, source) {
+                var username = (source.username || "").trim();
+                var password = source.password || "";
+                var db = source.db;
+                if (username) {
+                    target.username = username;
+                }
+                if (password) {
+                    target.password = password;
+                }
+                if (db !== undefined && db !== null && db !== "") {
+                    target.db = asNumber(db, 0);
+                }
+                if (source.tls) {
+                    target.tls = {};
+                }
+                return target;
+            }
+
+            function cleanKnownSingleKeys(options) {
+                var copy = {};
+                if (Array.isArray(options)) {
+                    return copy;
+                }
+                Object.keys(options || {}).forEach(function(key) {
+                    if (["host", "port", "username", "password", "db", "tls"].indexOf(key) === -1) {
+                        copy[key] = options[key];
+                    }
+                });
+                return copy;
+            }
+
+            function cleanKnownClusterNodeKeys(options) {
+                var copy = {};
+                Object.keys(options || {}).forEach(function(key) {
+                    if (["host", "port", "username", "password", "db", "tls"].indexOf(key) === -1) {
+                        copy[key] = options[key];
+                    }
+                });
+                return copy;
+            }
+
+            function cleanKnownSentinelKeys(options) {
+                var copy = {};
+                if (Array.isArray(options)) {
+                    return copy;
+                }
+                Object.keys(options || {}).forEach(function(key) {
+                    if ([
+                        "sentinels",
+                        "name",
+                        "role",
+                        "username",
+                        "password",
+                        "tls",
+                        "sentinelUsername",
+                        "sentinelPassword",
+                        "sentinelTLS"
+                    ].indexOf(key) === -1) {
+                        copy[key] = options[key];
+                    }
+                });
+                return copy;
+            }
+
+            function getListItems(selector) {
+                var rows = [];
+                $(selector).editableList("items").each(function() {
+                    var row = $(this);
+                    var item = {
+                        host: row.find(".redis-config-node-host").val(),
+                        port: row.find(".redis-config-node-port").val()
+                    };
+                    if (row.find(".redis-config-node-username").length) {
+                        item.username = row.find(".redis-config-node-username").val();
+                        item.password = row.find(".redis-config-node-password").val();
+                        item.tls = row.find(".redis-config-node-tls").is(":checked");
+                    }
+                    rows.push(item);
+                });
+                return rows;
+            }
+
+            function setListItems(selector, items, defaultPort) {
+                var list = $(selector);
+                list.editableList("empty");
+                (items || []).forEach(function(item) {
+                    list.editableList("addItem", item);
+                });
+                if (!items || items.length === 0) {
+                    list.editableList("addItem", {
+                        host: "127.0.0.1",
+                        port: defaultPort
+                    });
+                }
+            }
+
+            function createNodeList(selector, defaultPort, options) {
+                options = options || {};
+                var hasAuthFields = !!options.authFields;
+                $(selector).editableList({
+                    addButton: true,
+                    removable: true,
+                    height: hasAuthFields ? 176 : 136,
+                    addItem: function(row, index, data) {
+                        var item = data || {};
+                        row.addClass("redis-config-list-row");
+                        var fields = $("<div>", {
+                            class: "redis-config-list-fields " + (hasAuthFields ? "redis-config-list-fields-auth" : "redis-config-list-fields-basic")
+                        }).appendTo(row);
+                        $("<input>", {
+                            type: "text",
+                            class: "redis-config-node-host",
+                            placeholder: "Host"
+                        }).val(item.host || "127.0.0.1").appendTo(fields);
+                        $("<input>", {
+                            type: "number",
+                            class: "redis-config-node-port",
+                            placeholder: "Port",
+                            min: 0
+                        }).val(item.port || defaultPort).appendTo(fields);
+                        if (hasAuthFields) {
+                            $("<input>", {
+                                type: "text",
+                                class: "redis-config-node-username",
+                                placeholder: "Username"
+                            }).val(item.username || "").appendTo(fields);
+                            $("<input>", {
+                                type: "password",
+                                class: "redis-config-node-password",
+                                placeholder: "Password"
+                            }).val(item.password || "").appendTo(fields);
+                            $("<span>", {
+                                class: "redis-config-list-tls"
+                            }).append($("<input>", {
+                                type: "checkbox",
+                                class: "redis-config-node-tls redis-config-checkbox"
+                            }).prop("checked", hasTls(item))).appendTo(fields);
+                        }
+                        row.find("input").on("change keyup", syncConnectionToEditor);
+                    }
+                });
+            }
+
+            function buildSingleOptions(existing) {
+                var base = cleanKnownSingleKeys(existing || {});
+                base.host = ($("#redis-config-single-host").val() || "127.0.0.1").trim();
+                base.port = asNumber($("#redis-config-single-port").val(), 6379);
+                return applyOptionalConnectionOptions(base, {
+                    username: $("#redis-config-single-username").val(),
+                    password: $("#redis-config-single-password").val(),
+                    db: $("#redis-config-single-db").val(),
+                    tls: $("#redis-config-single-tls").is(":checked")
+                });
+            }
+
+            function buildClusterOptions(existing) {
+                var existingNodes = Array.isArray(existing) ? existing : [];
+                var provider = $("#redis-config-cluster-provider").val();
+                var auth = {
+                    username: $("#redis-config-cluster-username").val(),
+                    password: $("#redis-config-cluster-password").val(),
+                    tls: $("#redis-config-cluster-tls").is(":checked")
+                };
+                if (provider === "aws") {
+                    var endpoint = parseEndpoint($("#redis-config-aws-endpoint").val(), 6379);
+                    var awsNode = Object.assign({}, cleanKnownClusterNodeKeys(existingNodes[0]), {
+                        host: endpoint.host || "clustercfg.my-cluster.abc123.memorydb.ap-southeast-2.amazonaws.com",
+                        port: endpoint.port
+                    });
+                    delete awsNode.db;
+                    awsNode = applyOptionalConnectionOptions(awsNode, {
+                        username: auth.username,
+                        password: auth.password,
+                        tls: false
+                    });
+                    awsNode.dnsLookupStrategy = "identity";
+                    return [awsNode];
+                }
+                return getListItems("#redis-config-cluster-nodes").map(function(item, index) {
+                    var nodeOptions = Object.assign({}, cleanKnownClusterNodeKeys(existingNodes[index]), {
+                        host: (item.host || "127.0.0.1").trim(),
+                        port: asNumber(item.port, 6379)
+                    });
+                    delete nodeOptions.db;
+                    return applyOptionalConnectionOptions(nodeOptions, {
+                        username: item.username,
+                        password: item.password,
+                        tls: item.tls
+                    });
+                });
+            }
+
+            function buildSentinelOptions(existing) {
+                var base = cleanKnownSentinelKeys(existing || {});
+                var sentinelItems = getListItems("#redis-config-sentinel-nodes");
+                base.name = ($("#redis-config-sentinel-master").val() || "mymaster").trim();
+                base.sentinels = sentinelItems.map(function(item) {
+                    return {
+                        host: (item.host || "127.0.0.1").trim(),
+                        port: asNumber(item.port, 26379)
+                    };
+                });
+                var sentinelAuth = sentinelItems.find(function(item) {
+                    return (item.username || "").trim() || item.password || item.tls;
+                });
+                if (sentinelAuth) {
+                    var sentinelUsername = (sentinelAuth.username || "").trim();
+                    if (sentinelUsername) {
+                        base.sentinelUsername = sentinelUsername;
+                    }
+                    if (sentinelAuth.password) {
+                        base.sentinelPassword = sentinelAuth.password;
+                    }
+                    if (sentinelAuth.tls) {
+                        base.sentinelTLS = {};
+                    }
+                }
+                return base;
+            }
+
+            function detectMode(options) {
+                if ($("#node-config-input-cluster").is(":checked") || Array.isArray(options)) {
+                    return "cluster";
+                }
+                if (options && Array.isArray(options.sentinels)) {
+                    return "sentinel";
+                }
+                return "single";
+            }
+
+            function detectClusterProvider(options) {
+                var nodes = Array.isArray(options) ? options : [];
+                var host = nodes[0] && nodes[0].host ? nodes[0].host : "";
+                if (nodes.length === 1 && (/^clustercfg\./.test(host) || /\.memorydb\./.test(host) || /\.cache\.amazonaws\.com$/.test(host))) {
+                    return "aws";
+                }
+                return "cluster";
+            }
+
+            function populateFormFromOptions(options) {
+                isSyncing = true;
+                var mode = detectMode(options);
+                $("#redis-config-mode").val(mode);
+                $("#node-config-input-cluster").prop("checked", mode === "cluster");
+
+                if (mode === "cluster") {
+                    var nodes = Array.isArray(options) ? options : [];
+                    var provider = detectClusterProvider(options);
+                    var firstNode = nodes[0] || {};
+                    $("#redis-config-cluster-provider").val(provider);
+                    $("#redis-config-cluster-username").val(firstNode.username || "");
+                    $("#redis-config-cluster-password").val(firstNode.password || "");
+                    $("#redis-config-cluster-tls").prop("checked", hasTls(firstNode));
+                    if (provider === "aws") {
+                        $("#redis-config-aws-endpoint").val(formatEndpoint(firstNode.host || "clustercfg.my-cluster.abc123.memorydb.ap-southeast-2.amazonaws.com", firstNode.port || 6379));
+                        $("#redis-config-cluster-tls").prop("checked", firstNode.tls !== undefined ? hasTls(firstNode) : true);
+                    } else {
+                        setListItems("#redis-config-cluster-nodes", nodes.map(function(item) {
+                            return {
+                                host: item.host || "127.0.0.1",
+                                port: item.port || 6379,
+                                username: item.username || "",
+                                password: item.password || "",
+                                tls: hasTls(item)
+                            };
+                        }), 6379);
+                    }
+                } else if (mode === "sentinel") {
+                    $("#redis-config-sentinel-master").val((options && options.name) || "mymaster");
+                    var sentinelUsername = (options && options.sentinelUsername) || "";
+                    var sentinelPassword = (options && options.sentinelPassword) || "";
+                    var sentinelTls = !!(options && options.sentinelTLS);
+                    setListItems("#redis-config-sentinel-nodes", (options.sentinels || []).map(function(item) {
+                        return {
+                            host: item.host || "127.0.0.1",
+                            port: item.port || 26379,
+                            username: item.username || sentinelUsername,
+                            password: item.password || sentinelPassword,
+                            tls: item.tls !== undefined ? hasTls(item) : sentinelTls
+                        };
+                    }), 26379);
+                } else {
+                    options = options || {};
+                    $("#redis-config-single-host").val(options.host || "127.0.0.1");
+                    $("#redis-config-single-port").val(options.port || 6379);
+                    $("#redis-config-single-username").val(options.username || "");
+                    $("#redis-config-single-password").val(options.password || "");
+                    $("#redis-config-single-db").val(options.db === undefined || options.db === null ? "" : options.db);
+                    $("#redis-config-single-tls").prop("checked", hasTls(options));
+                }
+                isSyncing = false;
+                updateVisibility();
+            }
+
+            function updateVisibility() {
+                var mode = $("#redis-config-mode").val();
+                var provider = $("#redis-config-cluster-provider").val();
+                $(".redis-config-mode-section, .redis-config-provider-section").removeClass("redis-config-active-section").hide();
+                $("#redis-config-" + mode + "-section").addClass("redis-config-active-section").show();
+                if (mode === "cluster") {
+                    if (provider === "cluster") {
+                        $("#redis-config-cluster-manual-section").addClass("redis-config-active-section").show();
+                        $("#redis-config-cluster-tls").prop("disabled", false);
+                    } else {
+                        $("#redis-config-cluster-aws-section").addClass("redis-config-active-section").show();
+                        $("#redis-config-cluster-auth-section").addClass("redis-config-active-section").show();
+                        $("#redis-config-cluster-tls").prop("checked", true).prop("disabled", true);
+                    }
+                }
+                $("#node-config-input-cluster").prop("checked", mode === "cluster");
+                if (mode === "cluster" && provider === "cluster" && $("#redis-config-cluster-nodes").editableList("items").length === 0) {
+                    setListItems("#redis-config-cluster-nodes", [], 6379);
+                }
+                if (mode === "sentinel" && $("#redis-config-sentinel-nodes").editableList("items").length === 0) {
+                    setListItems("#redis-config-sentinel-nodes", [], 26379);
+                }
+                updateConnectionEditability();
+            }
+
+            function updateConnectionEditability() {
+                var disabled = $("#redis-config-options-type").val() !== "json";
+                $("#redis-config-connection-tab").find("input, select").prop("disabled", disabled);
+                $("#redis-config-cluster-nodes, #redis-config-sentinel-nodes")
+                    .closest(".red-ui-editableList")
+                    .find(".red-ui-editableList-addButton, .red-ui-editableList-item-remove")
+                    .toggle(!disabled);
+                if (!disabled && $("#redis-config-mode").val() === "cluster" && $("#redis-config-cluster-provider").val() !== "cluster") {
+                    $("#redis-config-cluster-tls").prop("checked", true).prop("disabled", true);
+                }
+            }
+
+            function syncConnectionToEditor() {
+                if (isSyncing || $("#redis-config-options-type").val() !== "json") {
+                    return;
+                }
+                var existing = parseJsonOptions();
+                var mode = $("#redis-config-mode").val();
+                var provider = $("#redis-config-cluster-provider").val();
+                var value;
+                if (mode === "cluster") {
+                    value = buildClusterOptions(existing);
+                } else if (mode === "sentinel") {
+                    value = buildSentinelOptions(existing);
+                } else {
+                    value = buildSingleOptions(existing);
+                }
+                var jsonStr = prettyOptions(value);
+                $("#node-config-input-options").val(jsonStr);
+                setEditorValue(jsonStr);
+            }
+
+            function syncEditorToForm() {
+                if ($("#redis-config-options-type").val() !== "json") {
+                    return;
+                }
+                var value = parseJsonOptions();
+                if (value) {
+                    populateFormFromOptions(value);
+                }
+            }
+
+            function updateOptionsType() {
+                var type = $("#redis-config-options-type").val();
+                var labels = {
+                    env: "Variable"
+                };
+                var placeholders = {
+                    env: "REDIS_OPTIONS"
+                };
+                var help = {
+                    env: "Reads the environment variable whose name is entered here. If that environment value is valid JSON, the runtime parses it before connecting."
+                };
+                $("#node-config-input-optionsType").val(type);
+                $(".redis-config-json-only").toggle(type === "json");
+                $(".redis-config-raw-only").toggle(type !== "json");
+                $("#redis-config-prettify-options").toggle(type === "json");
+                updateConnectionEditability();
+                if (type !== "json") {
+                    $("#redis-config-options-raw-label").text(labels[type] || "Value");
+                    $("#redis-config-options-raw").attr("placeholder", placeholders[type] || "");
+                    $("#redis-config-options-raw-help").text(help[type] || "");
+                    $("#redis-config-options-raw").val(lastEnvOptions);
+                }
+            }
+
+            function prettifyEditorJson() {
+                var message = $("#redis-config-options-editor-message");
+                message.text("").removeClass("redis-config-error");
+                try {
+                    var value = JSON.parse(optionsEditor.getValue() || "{}");
+                    var pretty = prettyOptions(value);
+                    $("#node-config-input-options").val(pretty);
+                    setEditorValue(pretty);
+                    syncEditorToForm();
+                } catch (err) {
+                    message.text("Invalid JSON").addClass("redis-config-error");
+                }
+            }
+
+            function setTestMessage(target, state, text, detail) {
+                $(target)
+                    .removeClass("redis-config-success redis-config-error")
+                    .addClass(state ? "redis-config-" + state : "")
+                    .text(text || "")
+                    .attr("title", detail || "");
+            }
+
+            function buildConnectionTestPayload(target) {
+                var type = $("#redis-config-options-type").val() || "json";
+                var options;
+                if (type === "json") {
+                    syncConnectionToEditor();
+                    options = optionsEditor.getValue();
+                    try {
+                        JSON.parse(options || "{}");
+                    } catch (err) {
+                        setTestMessage(target, "error", "Invalid JSON: " + err.message);
+                        return null;
+                    }
+                    $("#node-config-input-options").val(options);
+                } else {
+                    options = $("#redis-config-options-raw").val();
+                    $("#node-config-input-options").val(options);
+                }
+                return {
+                    id: node.id,
+                    name: $("#node-config-input-name").val(),
+                    cluster: $("#redis-config-mode").val() === "cluster",
+                    optionsType: type,
+                    options: options
+                };
+            }
+
+            function runConnectionTest(target) {
+                var payload = buildConnectionTestPayload(target);
+                if (!payload) {
+                    return;
+                }
+                setTestMessage(target, "", "Testing...");
+                $.ajax({
+                    url: "redis-config/test",
+                    type: "POST",
+                    data: JSON.stringify(payload),
+                    contentType: "application/json; charset=utf-8",
+                    dataType: "json",
+                    success: function (result) {
+                        console.log("redis-config test connection result", result);
+                        setTestMessage(
+                            target,
+                            "success",
+                            (result.message || "Connection test passed") + " (" + result.durationMs + "ms)",
+                            JSON.stringify(result.log || [], null, 2)
+                        );
+                    },
+                    error: function (jqXHR, _textStatus, errorThrown) {
+                        var result = jqXHR.responseJSON || {};
+                        var message = result.message || errorThrown || "Connection test failed";
+                        console.error("redis-config test connection failed", result);
+                        setTestMessage(
+                            target,
+                            "error",
+                            message,
+                            JSON.stringify(result, null, 2)
+                        );
+                    }
+                });
+            }
+
+            function resizeConfigLayout() {
+                var content = $("#node-config-redis-tabs-content");
+                var container = content.closest(".red-ui-tray-content");
+                if (!container.length) {
+                    container = content.closest("#dialog-form");
+                }
+                if (!container.length || !content.length) {
+                    return;
+                }
+                var availableHeight = container[0].getBoundingClientRect().bottom - content[0].getBoundingClientRect().top - 4;
+                content.height(Math.max(380, availableHeight));
+            }
+
+            createNodeList("#redis-config-cluster-nodes", 6379, { authFields: true });
+            createNodeList("#redis-config-sentinel-nodes", 26379, { authFields: true });
+            node.redisConfigResizeLayout = resizeConfigLayout;
+
+            optionsEditor = RED.editor.createEditor({
+                id: "redis-config-options-editor",
+                mode: "ace/mode/json",
+                value: $("#node-config-input-options").val() || "{}"
+            });
+            node.redisConfigOptionsEditor = optionsEditor;
+
+            var initialTabId = this.optionsType === "env" ? "redis-config-tab-options" : "redis-config-tab-connection";
+            $("#redis-config-options-type").val(this.optionsType === "env" ? "env" : "json");
+            updateOptionsType();
+
+            var initialOptions = mergeSecrets(parseJsonOptions() || {}, parseSecrets($("#node-config-input-secrets").val()));
+            populateFormFromOptions(initialOptions);
+            if ($("#redis-config-options-type").val() === "json") {
+                syncConnectionToEditor();
+            }
+            redisConfigTabs.activateTab(initialTabId);
+
+            $("#redis-config-mode, #redis-config-cluster-provider").on("change input click keyup", function() {
+                updateVisibility();
+                syncConnectionToEditor();
+                setTimeout(updateVisibility, 0);
+            });
+            $("#redis-config-connection-tab input, #redis-config-connection-tab select").on("change keyup", syncConnectionToEditor);
+            $("#redis-config-options-type").on("change", function() {
+                if ($("#node-config-input-optionsType").val() === "env") {
+                    lastEnvOptions = $("#redis-config-options-raw").val();
+                }
+                updateOptionsType();
+                if ($("#redis-config-options-type").val() === "json") {
+                    syncConnectionToEditor();
+                }
+            });
+            $("#redis-config-options-raw").on("change keyup", function() {
+                lastEnvOptions = $(this).val();
+                $("#node-config-input-options").val($(this).val());
+            });
+            $("#redis-config-prettify-options").on("click", function(evt) {
+                evt.preventDefault();
+                prettifyEditorJson();
+            });
+            optionsEditor.getSession().on("change", function() {
+                var content = optionsEditor.getValue();
+                try {
+                    JSON.parse(content);
+                    $("#node-config-input-options").val(content);
+                } catch (e) {
+                    // Non-JSON content (e.g. AWS dnsLookup appended) - keep existing hidden field value
+                }
+                $("#redis-config-options-editor-message").text("").removeClass("redis-config-error");
+            });
+            optionsEditor.on("blur", syncEditorToForm);
+            $(".redis-config-test-button").on("click", function(evt) {
+                evt.preventDefault();
+                runConnectionTest($(this).siblings(".redis-config-test-message"));
+            });
+
+            setTimeout(function() {
+                resizeConfigLayout();
+                redisConfigTabs.resize();
+                optionsEditor.resize();
+            }, 0);
+        },
+        oneditsave: function () {
+            var type = $("#redis-config-options-type").val() || "json";
+            $("#node-config-input-optionsType").val(type);
+            if (type === "json" && this.redisConfigOptionsEditor) {
+                var editorVal = this.redisConfigOptionsEditor.getValue();
+                var parsed = null;
+                try {
+                    parsed = JSON.parse(editorVal);
+                } catch (e) {
+                    // Non-JSON editor content (e.g. AWS dnsLookup appended) -
+                    // fall back to the hidden field kept in sync by syncConnectionToEditor
+                    try { parsed = JSON.parse($("#node-config-input-options").val()); } catch (e2) { parsed = null; }
+                }
+                if (parsed !== null && parsed !== undefined) {
+                    var result = extractSecrets(parsed);
+                    $("#node-config-input-options").val(JSON.stringify(result.stripped));
+                    $("#node-config-input-secrets").val(
+                        Object.keys(result.secrets).length ? JSON.stringify(result.secrets) : ""
+                    );
+                }
+            } else if (type !== "json") {
+                $("#node-config-input-options").val($("#redis-config-options-raw").val());
+                $("#node-config-input-secrets").val("");
+            }
+            $("#node-config-input-cluster").prop("checked", $("#redis-config-mode").val() === "cluster");
+            if (this.redisConfigOptionsEditor) {
+                this.redisConfigOptionsEditor.destroy();
+                this.redisConfigOptionsEditor = null;
+            }
+            this.redisConfigResizeLayout = null;
+        },
+        oneditcancel: function () {
+            if (this.redisConfigOptionsEditor) {
+                this.redisConfigOptionsEditor.destroy();
+                this.redisConfigOptionsEditor = null;
+            }
+            this.redisConfigResizeLayout = null;
+        },
+        oneditresize: function () {
+            if (this.redisConfigResizeLayout) {
+                this.redisConfigResizeLayout();
+            }
+            if (this.redisConfigOptionsEditor) {
+                this.redisConfigOptionsEditor.resize();
+            }
         }
     });
 </script>
 
 <script type="text/x-red" data-template-name="redis-config">
     <div class="form-row">
-        <label for="node-config-input-name"><i class="fa fa-server"></i> Name</label>
-        <input type="text" id="node-config-input-name">
+        <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-config-input-name" placeholder="Name">
     </div>
-    <div class="form-row">
-        <label for="node-config-input-options"><i class="fa fa-random"></i> Options</label>
-        <input type="text" id="node-config-input-options">
-        <input type="hidden" id="node-config-input-optionsType">
+    <div class="form-row redis-config-tabs-row">
+        <ul id="node-config-redis-tabs"></ul>
     </div>
-    <div class="form-row">
-        <label for="node-config-input-cluster">&nbsp;</label>
-        <input type="checkbox" id="node-config-input-cluster" style="display:inline-block; width:15px; vertical-align:baseline;"> Cluster
+    <div id="node-config-redis-tabs-content">
+        <div id="redis-config-tab-connection">
+            <div id="redis-config-connection-tab">
+                <div class="form-row">
+                    <label for="redis-config-mode"><i class="fa fa-random"></i> Redis Mode</label>
+                    <select id="redis-config-mode" class="redis-config-mode-select">
+                        <option value="single">Single</option>
+                        <option value="cluster">Cluster</option>
+                        <option value="sentinel">Sentinel</option>
+                    </select>
+                </div>
+
+                <div id="redis-config-single-section" class="redis-config-mode-section">
+                    <div class="form-row">
+                        <label for="redis-config-single-host"><i class="fa fa-globe"></i> Host</label>
+                        <input type="text" id="redis-config-single-host" class="redis-config-input" placeholder="127.0.0.1">
+                    </div>
+                    <div class="form-row">
+                        <label for="redis-config-single-port"><i class="fa fa-sign-in"></i> Port</label>
+                        <input type="number" id="redis-config-single-port" class="redis-config-small-input" placeholder="6379" min="0">
+                    </div>
+                    <div class="form-row">
+                        <label for="redis-config-single-username"><i class="fa fa-user"></i> Username</label>
+                        <input type="text" id="redis-config-single-username" class="redis-config-input">
+                    </div>
+                    <div class="form-row">
+                        <label for="redis-config-single-password"><i class="fa fa-lock"></i> Password</label>
+                        <div class="redis-config-pw-wrap">
+                            <input type="password" id="redis-config-single-password">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <label for="redis-config-single-db"><i class="fa fa-database"></i> Logical DB</label>
+                        <input type="number" id="redis-config-single-db" class="redis-config-small-input" min="0" placeholder="index">
+                    </div>
+                    <div class="form-row">
+                        <label for="redis-config-single-tls"><i class="fa fa-shield"></i> Security</label>
+                        <input type="checkbox" id="redis-config-single-tls" class="redis-config-checkbox">
+                        <span>Use TLS</span>
+                    </div>
+                </div>
+
+                <div id="redis-config-cluster-section" class="redis-config-mode-section">
+                    <div class="form-row">
+                        <label for="redis-config-cluster-provider"><i class="fa fa-sitemap"></i> Provider</label>
+                        <select id="redis-config-cluster-provider" class="redis-config-provider-select">
+                            <option value="cluster">Redis Cluster</option>
+                            <option value="aws">AWS MemoryDB / ElastiCache</option>
+                        </select>
+                    </div>
+                    <div id="redis-config-cluster-manual-section" class="redis-config-provider-section">
+                        <div class="form-row" style="margin-bottom: 2px;">
+                            <label><i class="fa fa-server"></i> Nodes</label>
+                        </div>
+                        <div class="form-row" style="margin-bottom: 6px;">
+                            <div class="redis-config-list-panel" style="width: 100% !important; display: block;">
+                                <div class="redis-config-list-header redis-config-list-header-auth">
+                                    <span>Host</span>
+                                    <span>Port</span>
+                                    <span>Username</span>
+                                    <span>Password</span>
+                                    <span class="redis-config-list-tls-heading">TLS</span>
+                                    <span class="redis-config-list-delete-heading"></span>
+                                </div>
+                                <ol id="redis-config-cluster-nodes"></ol>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="redis-config-cluster-aws-section" class="redis-config-provider-section">
+                        <div class="form-row">
+                            <label for="redis-config-aws-endpoint"><i class="fa fa-globe"></i> Endpoint</label>
+                            <input type="text" id="redis-config-aws-endpoint" class="redis-config-input" placeholder="clustercfg.my-cluster.abc123.memorydb.ap-southeast-2.amazonaws.com:6379">
+                        </div>
+                    </div>
+                    <div id="redis-config-cluster-auth-section" class="redis-config-provider-section">
+                        <div class="form-row">
+                            <label for="redis-config-cluster-username"><i class="fa fa-user"></i> Username</label>
+                            <input type="text" id="redis-config-cluster-username" class="redis-config-input">
+                        </div>
+                        <div class="form-row">
+                            <label for="redis-config-cluster-password"><i class="fa fa-lock"></i> Password</label>
+                            <div class="redis-config-pw-wrap">
+                                <input type="password" id="redis-config-cluster-password">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <label for="redis-config-cluster-tls"><i class="fa fa-shield"></i> Security</label>
+                            <input type="checkbox" id="redis-config-cluster-tls" class="redis-config-checkbox">
+                            <span>Use TLS</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="redis-config-sentinel-section" class="redis-config-mode-section">
+                    <div class="form-row">
+                        <label for="redis-config-sentinel-master"><i class="fa fa-tag"></i> Name</label>
+                        <input type="text" id="redis-config-sentinel-master" class="redis-config-half-input" placeholder="mymaster">
+                    </div>
+                    <div class="form-row" style="margin-bottom: 2px;">
+                        <label><i class="fa fa-server"></i> Sentinels</label>
+                    </div>
+                    <div class="form-row" style="margin-bottom: 6px;">
+                        <div class="redis-config-list-panel" style="width: 100% !important; display: block;">
+                            <div class="redis-config-list-header redis-config-list-header-auth">
+                                <span>Host</span>
+                                <span>Port</span>
+                                <span>Username</span>
+                                <span>Password</span>
+                                <span class="redis-config-list-tls-heading">TLS</span>
+                                <span class="redis-config-list-delete-heading"></span>
+                            </div>
+                            <ol id="redis-config-sentinel-nodes"></ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="form-row redis-config-test-row">
+                <button type="button" class="red-ui-button redis-config-test-button"><i class="fa fa-plug"></i> Test connection</button>
+                <span class="redis-config-test-message"></span>
+            </div>
+        </div>
+        <div id="redis-config-tab-options" style="display:none">
+            <div class="form-row">
+                <label for="redis-config-options-type"><i class="fa fa-code"></i> Type</label>
+                <select id="redis-config-options-type" class="redis-config-options-type-select">
+                    <option value="json">JSON</option>
+                    <option value="env">Environment variable</option>
+                </select>
+                <button type="button" class="red-ui-button" id="redis-config-prettify-options"><i class="fa fa-magic"></i> Prettify</button>
+                <span id="redis-config-options-editor-message" class="redis-config-inline-message"></span>
+            </div>
+            <div class="form-row redis-config-json-only redis-config-editor-row">
+                <div id="redis-config-options-editor" class="node-text-editor"></div>
+            </div>
+            <div class="form-row redis-config-raw-only" style="display:none">
+                <label for="redis-config-options-raw"><i class="fa fa-cog"></i> <span id="redis-config-options-raw-label">Value</span></label>
+                <input type="text" id="redis-config-options-raw">
+            </div>
+            <div class="form-row redis-config-raw-only redis-config-raw-help" id="redis-config-options-raw-help" style="display:none"></div>
+            <div class="form-row redis-config-test-row">
+                <button type="button" class="red-ui-button redis-config-test-button"><i class="fa fa-plug"></i> Test connection</button>
+                <span class="redis-config-test-message"></span>
+            </div>
+        </div>
     </div>
+    <input type="hidden" id="node-config-input-options">
+    <input type="hidden" id="node-config-input-optionsType">
+    <input type="hidden" id="node-config-input-secrets">
+    <input type="checkbox" id="node-config-input-cluster" style="display:none;">
+</script>
+
+<script type="text/x-red" data-help-name="redis-config">
+<p>Defines a shared Redis connection for all redis nodes that reference it.</p>
+<p>The connection can target a standalone Redis server, Redis Cluster, AWS
+MemoryDB/ElastiCache cluster endpoint, or Redis Sentinel.</p>
+<p><b>Secret storage:</b> in JSON mode, passwords are saved in Node-RED&rsquo;s encrypted
+credentials (not in the exported flow) and merged into the connection at runtime. With the
+<b>Environment variable</b> type, the secret stays in the environment and is never written to
+the flow.</p>
+
+<h3>Properties</h3>
+<dl class="message-properties">
+    <dt>Name</dt>
+    <dd>A display label for this connection, shown in the node editor and palette.</dd>
+    <dt>Redis Mode</dt>
+    <dd>
+        Selects the connection shape generated by the <strong>Connection</strong> tab:
+        <ul>
+            <li><strong>Single</strong> &mdash; connects with <code>new Redis(options)</code>.</li>
+            <li><strong>Cluster</strong> &mdash; connects with <code>new Redis.Cluster(startupNodes)</code>.</li>
+            <li><strong>Sentinel</strong> &mdash; connects with <code>new Redis(options)</code> using ioredis Sentinel discovery.</li>
+        </ul>
+    </dd>
+    <dt>Connection</dt>
+    <dd>
+        Provides common fields and keeps the saved connection options in sync:
+        <ul>
+            <li><strong>Single</strong>: host, port, optional ACL username/password, logical database, and TLS.</li>
+            <li><strong>Redis Cluster</strong>: one or more startup nodes, each with optional ACL username/password and TLS.</li>
+            <li><strong>AWS MemoryDB / ElastiCache</strong>: a cluster configuration endpoint with optional ACL username/password. TLS is enabled for this provider.</li>
+            <li><strong>Sentinel</strong>: Sentinel master name plus Sentinel endpoints. Endpoint username/password/TLS fields become <code>sentinelUsername</code>, <code>sentinelPassword</code>, and <code>sentinelTLS</code>.</li>
+        </ul>
+    </dd>
+    <dt>ConnString</dt>
+    <dd>
+        Advanced connection options passed to
+        <a href="https://github.com/redis/ioredis" target="_blank">ioredis</a>. The
+        <strong>JSON</strong> editor stores the exact value used at runtime. In Single and
+        Sentinel modes the value is an object. In Cluster mode the value is an array of
+        startup-node objects. The default Single connection is
+        <code>{"host":"127.0.0.1","port":6379}</code>.
+        <br><br>
+        Select <strong>Environment variable</strong> to store the name of an environment
+        variable instead of literal JSON in the flow. At runtime, the environment value is
+        parsed as JSON when possible; otherwise it is passed to ioredis as a plain value.
+        Saved environment-variable configs reopen on this tab with the variable name
+        selected and populated. While this type is selected, the <strong>Connection</strong>
+        tab is read-only; switch back to <strong>JSON</strong> to edit the Connection tab.
+    </dd>
+    <dt>Test connection</dt>
+    <dd>
+        Runs a full temporary connection cycle using the current form values: create the
+        Redis client, connect, send <code>PING</code>, expect <code>PONG</code>, then
+        disconnect with <code>QUIT</code>. The result is shown next to the button. Failures
+        are logged with verbose connection details in the runtime console and Debug sidebar.
+        When <strong>Environment variable</strong> is selected, the test resolves that
+        variable first and reports an error if it is not set.
+    </dd>
+    <dt>Common examples</dt>
+    <dd>
+        <ul>
+            <li><code>{"host": "my-redis", "port": 6379}</code></li>
+            <li><code>{"host": "redis", "port": 6379, "username": "default", "password": "secret"}</code></li>
+            <li><code>{"host": "redis", "port": 6380, "tls": {}}</code> &mdash; TLS</li>
+            <li><code>{"host": "redis", "db": 2}</code> &mdash; select database 2</li>
+            <li><code>{"sentinels":[{"host":"sentinel","port":26379}],"name":"mymaster"}</code> &mdash; Sentinel</li>
+            <li><code>[{"host":"node1","port":6379},{"host":"node2","port":6379}]</code> &mdash; Redis Cluster startup nodes</li>
+        </ul>
+        See all available options in the
+        <a href="https://github.com/redis/ioredis#connect-to-redis" target="_blank">&#8599; ioredis connection documentation</a>.
+    </dd>
+    <dt>Cluster</dt>
+    <dd>
+        Use for
+        <a href="https://redis.io/docs/management/scaling/" target="_blank">Redis Cluster</a>.
+        The saved options must be a JSON array of startup nodes:<br>
+        <code>[{"host":"node1","port":6379},{"host":"node2","port":6380}]</code>.
+        Startup-node <code>username</code>, <code>password</code>, and <code>tls</code>
+        values are also applied to ioredis <code>redisOptions</code>, so discovered cluster
+        nodes authenticate the same way as the startup nodes.
+    </dd>
+    <dt>AWS cluster endpoints</dt>
+    <dd>
+        The AWS MemoryDB / ElastiCache provider saves the endpoint as a single startup
+        node with <code>dnsLookupStrategy: "identity"</code>. At runtime this enables
+        identity DNS lookup and TLS for the ioredis Cluster client:
+        <code>[{"host":"clustercfg.example.memorydb.region.amazonaws.com","port":6379,"dnsLookupStrategy":"identity"}]</code>.
+    </dd>
+    <dt>Sentinel</dt>
+    <dd>
+        Sentinel mode saves an ioredis Sentinel options object with a master
+        <code>name</code> and a <code>sentinels</code> array. If the Redis master/replicas
+        require ACL authentication, add top-level <code>username</code> and
+        <code>password</code> in <strong>ConnString</strong>. If the Sentinel endpoints
+        themselves require authentication or TLS, use <code>sentinelUsername</code>,
+        <code>sentinelPassword</code>, and <code>sentinelTLS</code>.
+    </dd>
+</dl>
 </script>
 
 <script type="text/javascript">
@@ -55,8 +1252,8 @@
         category: 'Redis',
         inputs: 0,
         outputs: 1,
-        color: "#ffffff",
-        icon: "redis.png",
+        color: "#f3c5bf",
+        icon: "redis-logo.png",
         paletteLabel: "redis in",
         defaults: {
             server: {
@@ -81,15 +1278,34 @@
                 validate: RED.validators.number()
             },
             groupname: {
-                value: ""
+                value: "",
+                validate: function (v) {
+                    var cmd = $("#node-input-command").val() || this.command;
+                    return cmd !== "xreadgroup" || (v && v.trim() !== "");
+                }
             },
             consumername: {
-                value: ""
-            }
+                value: "",
+                validate: function (v) {
+                    var cmd = $("#node-input-command").val() || this.command;
+                    return cmd !== "xreadgroup" || (v && v.trim() !== "");
+                }
             }
         },
         label: function () {
             return this.name || this.topic || "redis in";
+        },
+        oneditprepare: function () {
+            function toggleFields() {
+                var cmd = $("#node-input-command").val();
+                var isXreadgroup = cmd === "xreadgroup";
+                var hasPubSub = cmd === "subscribe" || cmd === "psubscribe";
+                $("#node-input-groupname-row").toggle(isXreadgroup);
+                $("#node-input-consumername-row").toggle(isXreadgroup);
+                $("#node-input-timeout-row").toggle(!hasPubSub && !isXreadgroup);
+            }
+            toggleFields();
+            $("#node-input-command").on("change", toggleFields);
         }
     });
 </script>
@@ -104,30 +1320,32 @@
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
     <div class="form-row">
-        <label for="node-input-topic"><i class="icon-tasks"></i> Topic</label>
+        <label for="node-input-topic"><i class="fa fa-key"></i> Topic</label>
         <input type="text" id="node-input-topic" placeholder="Topic">
     </div>
     <div class="form-row">
-        <label for="node-input-command"><i class="fa fa-unlock"></i> Method</label>
+        <label for="node-input-command"><i class="fa fa-terminal"></i> Method</label>
         <select id="node-input-command">
-                <div class="form-row">
-                    <label for="node-input-groupname"><i class="fa fa-users"></i> Group</label>
-                    <input type="text" id="node-input-groupname" placeholder="Consumer group name">
-                </div>
-                <div class="form-row">
-                    <label for="node-input-consumername"><i class="fa fa-user"></i> Consumer</label>
-                    <input type="text" id="node-input-consumername" placeholder="Consumer name">
-                </div>
-            <option value="blpop" selected>BLPOP</option>
+            <option value="blpop">BLPOP</option>
             <option value="brpop">BRPOP</option>
+            <option value="bzpopmin">BZPOPMIN</option>
+            <option value="bzpopmax">BZPOPMAX</option>
             <option value="subscribe">SUBSCRIBE</option>
             <option value="psubscribe">PSUBSCRIBE</option>
             <option value="xreadgroup">XREADGROUP</option>
         </select>
     </div>
-    <div class="form-row">
+    <div class="form-row" id="node-input-groupname-row">
+        <label for="node-input-groupname"><i class="fa fa-users"></i> Group</label>
+        <input type="text" id="node-input-groupname" placeholder="Consumer group name">
+    </div>
+    <div class="form-row" id="node-input-consumername-row">
+        <label for="node-input-consumername"><i class="fa fa-user"></i> Consumer</label>
+        <input type="text" id="node-input-consumername" placeholder="Consumer name">
+    </div>
+    <div class="form-row" id="node-input-timeout-row">
         <label for="node-input-timeout"><i class="fa fa-clock-o"></i> Timeout</label>
-        <input type="text" id="node-input-timeout" placeholder="Timeout">
+        <input type="number" id="node-input-timeout" placeholder="0" min="0">
     </div>
     <div class="form-row">
         <label for="node-input-obj">&nbsp;</label>
@@ -136,10 +1354,143 @@
 </script>
 
 <script type="text/x-red" data-help-name="redis-in">
-    <p>Redis in</p>
-    <p>Acts as Subscriber, using BLPOP, BRPOP, SUBSCRIBE, PSUBSCRIBE or XREADGROUP</p>
-    <p>The msg.topic is pattern on all methods, separated by spaces.</p>
-    <p>Note: Only PSUBSCRIBE supports patterns with wildcards.</p>
+<p>Listens to Redis and emits a message for every value received. The node opens a
+dedicated connection that stays alive until the flow is stopped or redeployed.</p>
+<p>Blocking inputs (BLPOP/BRPOP/BZPOPMIN/BZPOPMAX/XREADGROUP) auto-recover: if a command
+fails or the connection drops, the node logs a warning, shows a <em>retrying</em> status,
+and retries with capped backoff. The consumer stops only when the flow is stopped or
+redeployed.</p>
+
+<h3>Outputs</h3>
+<dl class="message-properties">
+    <dt>topic <span class="property-type">string</span></dt>
+    <dd>The Redis key or channel the value arrived on.</dd>
+    <dt>payload <span class="property-type">string | number | object | array</span></dt>
+    <dd>The received value. JSON-parsed when <em>Parse payload from JSON Object</em> is enabled;
+        raw string otherwise.</dd>
+    <dt>pattern <span class="property-type">string</span></dt>
+    <dd><em>PSUBSCRIBE only.</em> The glob pattern that matched the incoming channel.</dd>
+    <dt>stream <span class="property-type">string</span></dt>
+    <dd><em>XREADGROUP only.</em> The stream key the entry was read from.</dd>
+    <dt>messageId <span class="property-type">string</span></dt>
+    <dd><em>XREADGROUP only.</em> The stream entry ID, e.g. <code>1718000000000-0</code>.</dd>
+</dl>
+
+<h3>Properties</h3>
+<dl class="message-properties">
+    <dt>Server</dt>
+    <dd>The <em>redis-config</em> node that defines the connection.</dd>
+    <dt>Topic</dt>
+    <dd>The Redis key, channel, or pattern to listen on.
+        The exact meaning depends on the selected <strong>Method</strong> — see below.</dd>
+    <dt>Method</dt>
+    <dd>The Redis command used to receive data.</dd>
+    <dt>Group <span class="property-type">XREADGROUP only</span></dt>
+    <dd>Consumer group name. The group must already exist on the stream
+        (create it with <code>XGROUP CREATE</code>).</dd>
+    <dt>Consumer <span class="property-type">XREADGROUP only</span></dt>
+    <dd>A unique name for this consumer within the group. Multiple nodes in the same
+        group with different consumer names share the stream workload.</dd>
+    <dt>Timeout <span class="property-type">seconds · BLPOP / BRPOP / BZPOPMIN / BZPOPMAX only</span></dt>
+    <dd>How long to block waiting for data. <code>0</code> blocks indefinitely.
+        Ignored for pub/sub and stream commands.</dd>
+    <dt>Parse payload from JSON Object</dt>
+    <dd>When enabled the node calls <code>JSON.parse()</code> on the received string.
+        If parsing fails the raw string is forwarded unchanged.</dd>
+</dl>
+
+<h3>Methods</h3>
+
+<h4>BLPOP &mdash; Blocking List Pop (left) <em>since Redis 2.0</em></h4>
+<p>Blocks until a value is available at the <strong>head</strong> of the list at <strong>Topic</strong>,
+then removes and returns it. Use with a <em>redis-out</em> RPUSH producer for a reliable FIFO queue.</p>
+<ul>
+    <li><strong>Topic:</strong> a single list key, e.g. <code>jobs:queue</code></li>
+    <li><strong>Output:</strong> <code>msg.topic</code> = key name &nbsp;|&nbsp;
+        <code>msg.payload</code> = popped value</li>
+    <li><strong>Producer example:</strong> <code>RPUSH jobs:queue "task-1"</code></li>
+</ul>
+<p><a href="https://redis.io/commands/blpop/" target="_blank">&#8599; BLPOP reference</a></p>
+
+<h4>BRPOP &mdash; Blocking List Pop (right) <em>since Redis 2.0</em></h4>
+<p>Same as BLPOP but removes from the <strong>tail</strong> of the list.
+Pair with a LPUSH producer for a FIFO queue, or with RPUSH for a LIFO stack.</p>
+<ul>
+    <li><strong>Topic:</strong> a single list key, e.g. <code>tasks:fifo</code></li>
+    <li><strong>Output:</strong> <code>msg.topic</code> = key name &nbsp;|&nbsp;
+        <code>msg.payload</code> = popped value</li>
+</ul>
+<p><a href="https://redis.io/commands/brpop/" target="_blank">&#8599; BRPOP reference</a></p>
+
+<h4>BZPOPMIN &mdash; Blocking Sorted Set Pop (lowest score) <em>since Redis 5.0</em></h4>
+<p>Blocks until a member is available in the sorted set at <strong>Topic</strong>,
+then removes and returns the member with the <strong>lowest</strong> score.
+Use for priority queues where a lower score means higher priority.</p>
+<ul>
+    <li><strong>Topic:</strong> a single sorted set key, e.g. <code>jobs:priority</code></li>
+    <li><strong>Output:</strong> <code>msg.topic</code> = key name &nbsp;|&nbsp;
+        <code>msg.payload</code> = <code>{ member, score }</code>
+        (<code>score</code> is a JavaScript number)</li>
+    <li><strong>Producer example:</strong> use <em>redis-out</em> ZADD with
+        <code>{ "score": 5, "member": "send-email" }</code></li>
+</ul>
+<p><a href="https://redis.io/commands/bzpopmin/" target="_blank">&#8599; BZPOPMIN reference</a></p>
+
+<h4>BZPOPMAX &mdash; Blocking Sorted Set Pop (highest score) <em>since Redis 5.0</em></h4>
+<p>Same as BZPOPMIN but removes the member with the <strong>highest</strong> score first.
+Use when a higher score means higher priority.</p>
+<ul>
+    <li><strong>Topic:</strong> a single sorted set key, e.g. <code>jobs:urgency</code></li>
+    <li><strong>Output:</strong> <code>msg.topic</code> = key name &nbsp;|&nbsp;
+        <code>msg.payload</code> = <code>{ member, score }</code></li>
+</ul>
+<p><a href="https://redis.io/commands/bzpopmax/" target="_blank">&#8599; BZPOPMAX reference</a></p>
+
+<h4>SUBSCRIBE &mdash; Pub/Sub Channel Subscription <em>since Redis 2.0</em></h4>
+<p>Subscribes to an exact Redis Pub/Sub <strong>channel</strong>. Every message published
+to that channel is forwarded downstream. The connection stays open until the flow stops.</p>
+<ul>
+    <li><strong>Topic:</strong> exact channel name, e.g. <code>sensors:temperature</code></li>
+    <li><strong>Output:</strong> <code>msg.topic</code> = channel name &nbsp;|&nbsp;
+        <code>msg.payload</code> = message</li>
+    <li><strong>Publisher example:</strong> <code>PUBLISH sensors:temperature "22.5"</code></li>
+</ul>
+<p><a href="https://redis.io/commands/subscribe/" target="_blank">&#8599; SUBSCRIBE reference</a></p>
+
+<h4>PSUBSCRIBE &mdash; Pub/Sub Pattern Subscription <em>since Redis 2.0</em></h4>
+<p>Like SUBSCRIBE but matches channels with a <strong>glob-style pattern</strong>.
+Supported wildcards: <code>*</code> (any sequence), <code>?</code> (single character),
+<code>[abc]</code> (character class).</p>
+<ul>
+    <li><strong>Topic:</strong> glob pattern, e.g. <code>events:*</code></li>
+    <li><strong>Output:</strong> <code>msg.pattern</code> = matched pattern &nbsp;|&nbsp;
+        <code>msg.topic</code> = actual channel &nbsp;|&nbsp; <code>msg.payload</code> = message</li>
+    <li><strong>Example:</strong> pattern <code>sensor:?:temp</code> matches
+        <code>sensor:A:temp</code> and <code>sensor:B:temp</code></li>
+</ul>
+<p><a href="https://redis.io/commands/psubscribe/" target="_blank">&#8599; PSUBSCRIBE reference</a></p>
+
+<h4>XREADGROUP &mdash; Stream Consumer Group Read <em>since Redis 5.0</em></h4>
+<p>Reads new messages from a Redis Stream via a consumer group. Each message is delivered
+to exactly one consumer in the group, enabling parallel processing across multiple nodes.
+If the consumer group does not exist, the node retries automatically with capped backoff
+while logging a warning &mdash; create the group with <code>XGROUP CREATE</code> first.</p>
+<ul>
+    <li><strong>Topic format:</strong> <code>&lt;stream-key&gt;:&gt;</code><br>
+        The stream key and start ID are separated by the first <code>:</code>.
+        Use <code>&gt;</code> as the ID to receive only undelivered messages.<br>
+        <em>Important:</em> the stream key itself must not contain a colon.</li>
+    <li><strong>Group:</strong> consumer group name (must exist before the node starts)</li>
+    <li><strong>Consumer:</strong> this consumer&rsquo;s name within the group</li>
+    <li><strong>Output (Parse JSON on):</strong> <code>msg.stream</code> = stream key &nbsp;|&nbsp;
+        <code>msg.messageId</code> = entry ID &nbsp;|&nbsp;
+        <code>msg.payload</code> = object with all field&ndash;value pairs</li>
+    <li><strong>Output (Parse JSON off):</strong> <code>msg.payload</code> = flat
+        <code>["field", "value", ...]</code> array</li>
+    <li><strong>Setup example:</strong>
+        <code>XGROUP CREATE mystream workers $ MKSTREAM</code></li>
+</ul>
+<p><a href="https://redis.io/commands/xreadgroup/" target="_blank">&#8599; XREADGROUP reference</a></p>
 </script>
 
 
@@ -149,8 +1500,8 @@
         category: 'Redis',
         inputs: 1,
         outputs: 0,
-        color: "#ffffff",
-        icon: "redis.png",
+        color: "#f3c5bf",
+        icon: "redis-logo.png",
         align: "right",
         paletteLabel: "redis out",
         defaults: {
@@ -187,17 +1538,19 @@
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
     <div class="form-row">
-        <label for="node-input-topic"><i class="icon-tasks"></i> Topic</label>
+        <label for="node-input-topic"><i class="fa fa-key"></i> Topic</label>
         <input type="text" id="node-input-topic" placeholder="Topic">
     </div>
     <div class="form-row">
-        <label for="node-input-command"><i class="fa fa-unlock"></i> Method</label>
+        <label for="node-input-command"><i class="fa fa-terminal"></i> Method</label>
         <select id="node-input-command">
             <option value="rpush" selected>RPUSH</option>
             <option value="lpush">LPUSH</option>
             <option value="rpushx">RPUSHX</option>
             <option value="lpushx">LPUSHX</option>
             <option value="publish">PUBLISH</option>
+            <option value="xadd">XADD</option>
+            <option value="zadd">ZADD</option>
         </select>
     </div>
     <div class="form-row">
@@ -207,10 +1560,114 @@
 </script>
 
 <script type="text/x-red" data-help-name="redis-out">
-    <p>Redis out</p>
-    <p>Acts as Publisher, using RPUSH, LPUSH or PUBLISH</p>
-    <p>The msg.topic is key name to publish.</p>
-    <p>Note: Output only works on PUBLISH and return number of subscribers.</p>
+<p>Receives a message and writes its payload to Redis using the selected command.
+The node has no output — it is a terminal node.</p>
+<p>The write is awaited: the message completes only after Redis acknowledges it, and any
+write failure (for example <code>WRONGTYPE</code> or a lost connection) is reported through
+the node&rsquo;s error path, so a <em>catch</em> node can handle it.</p>
+
+<h3>Inputs</h3>
+<dl class="message-properties">
+    <dt>topic <span class="property-type">string (optional)</span></dt>
+    <dd>The Redis key or channel to write to.
+        Overrides the node&rsquo;s <strong>Topic</strong> setting when provided and non-empty.</dd>
+    <dt>payload <span class="property-type">any</span></dt>
+    <dd>The value to write. The exact format expected depends on the selected
+        <strong>Method</strong> &mdash; see below.</dd>
+</dl>
+
+<h3>Properties</h3>
+<dl class="message-properties">
+    <dt>Server</dt>
+    <dd>The <em>redis-config</em> node that defines the connection.</dd>
+    <dt>Topic</dt>
+    <dd>The Redis key or channel to write to.
+        Can be overridden per-message via <code>msg.topic</code>.</dd>
+    <dt>Method</dt>
+    <dd>The Redis write command to execute.</dd>
+    <dt>Serialize payload to JSON Object</dt>
+    <dd>When enabled, <code>msg.payload</code> is passed through <code>JSON.stringify()</code>
+        before being written (applies to list and pub/sub commands).
+        Disable to write the raw value as-is.</dd>
+</dl>
+
+<h3>Methods</h3>
+
+<h4>RPUSH &mdash; Push to Right of List <em>since Redis 1.0</em></h4>
+<p>Appends <code>msg.payload</code> to the <strong>tail</strong> of the list at <strong>Topic</strong>.
+Creates the list if it does not exist. Pair with a <em>redis-in</em> BLPOP consumer for a FIFO queue.</p>
+<ul>
+    <li><strong>Payload:</strong> string or any serializable value</li>
+    <li><strong>Example:</strong> Topic <code>jobs:queue</code>, payload <code>"task-1"</code>
+        &rarr; <code>RPUSH jobs:queue "task-1"</code></li>
+</ul>
+<p><a href="https://redis.io/commands/rpush/" target="_blank">&#8599; RPUSH reference</a></p>
+
+<h4>LPUSH &mdash; Push to Left of List <em>since Redis 1.0</em></h4>
+<p>Prepends <code>msg.payload</code> to the <strong>head</strong> of the list at <strong>Topic</strong>.
+Creates the list if it does not exist. Pair with a <em>redis-in</em> BRPOP consumer for FIFO,
+or BLPOP for a LIFO stack.</p>
+<ul>
+    <li><strong>Payload:</strong> string or any serializable value</li>
+    <li><strong>Example:</strong> Topic <code>tasks:stack</code>, payload <code>"item"</code>
+        &rarr; <code>LPUSH tasks:stack "item"</code></li>
+</ul>
+<p><a href="https://redis.io/commands/lpush/" target="_blank">&#8599; LPUSH reference</a></p>
+
+<h4>RPUSHX &mdash; Push to Right (if list exists) <em>since Redis 2.2</em></h4>
+<p>Same as RPUSH but silently does nothing if the key does not already exist.
+Useful as a guard to avoid creating orphaned queues.</p>
+<ul>
+    <li><strong>Payload:</strong> string or any serializable value</li>
+</ul>
+<p><a href="https://redis.io/commands/rpushx/" target="_blank">&#8599; RPUSHX reference</a></p>
+
+<h4>LPUSHX &mdash; Push to Left (if list exists) <em>since Redis 2.2</em></h4>
+<p>Same as LPUSH but silently does nothing if the key does not already exist.</p>
+<p><a href="https://redis.io/commands/lpushx/" target="_blank">&#8599; LPUSHX reference</a></p>
+
+<h4>PUBLISH &mdash; Pub/Sub Publish <em>since Redis 2.0</em></h4>
+<p>Posts <code>msg.payload</code> to the Pub/Sub channel specified by <strong>Topic</strong>.
+All active SUBSCRIBE or PSUBSCRIBE subscribers receive the message instantly.
+Messages are discarded if no subscribers are connected at the time of publish.</p>
+<ul>
+    <li><strong>Payload:</strong> string or JSON-serialized value</li>
+    <li><strong>Example:</strong> Topic <code>events:news</code>,
+        payload <code>{"headline":"Breaking"}</code>
+        (with <em>Serialize</em> on)</li>
+</ul>
+<p><a href="https://redis.io/commands/publish/" target="_blank">&#8599; PUBLISH reference</a></p>
+
+<h4>XADD &mdash; Append to Stream <em>since Redis 5.0</em></h4>
+<p>Appends <code>msg.payload</code> as a new entry to the stream at <strong>Topic</strong>.
+Creates the stream automatically if it does not exist.
+Each entry receives an auto-generated ID (<code>&lt;ms&gt;-&lt;seq&gt;</code>).
+Pair with a <em>redis-in</em> XREADGROUP consumer group.</p>
+<ul>
+    <li><strong>Object payload (recommended):</strong> each key becomes a field name &mdash;
+        <code>{"temp": 22, "unit": "C"}</code> produces fields <code>temp=22 unit=C</code></li>
+    <li><strong>Flat array payload:</strong> alternating field&ndash;value pairs &mdash;
+        <code>["temp", "22", "unit", "C"]</code></li>
+    <li><strong>String / number payload:</strong> stored as a single field named
+        <code>value</code>, e.g. <code>value=sensor-reading</code></li>
+    <li><em>Note:</em> the stream key in <strong>Topic</strong> must not contain a colon
+        (<code>:</code>) when paired with an XREADGROUP consumer.</li>
+</ul>
+<p><a href="https://redis.io/commands/xadd/" target="_blank">&#8599; XADD reference</a></p>
+
+<h4>ZADD &mdash; Add to Sorted Set <em>since Redis 1.2</em></h4>
+<p>Adds <code>msg.payload</code> to the sorted set at <strong>Topic</strong> with a numeric score.
+If the member already exists its score is updated.
+Pair with a <em>redis-in</em> BZPOPMIN or BZPOPMAX consumer for priority queues.</p>
+<ul>
+    <li><strong>Object payload (recommended):</strong>
+        <code>{"score": 5, "member": "task-name"}</code><br>
+        When <em>Serialize</em> is enabled, the member value is stored as a JSON string,
+        allowing object members to be round-tripped through the queue.</li>
+    <li><strong>Flat array payload:</strong> alternating score&ndash;member pairs &mdash;
+        <code>[10, "alpha", 20, "beta"]</code> adds two members in one call</li>
+</ul>
+<p><a href="https://redis.io/commands/zadd/" target="_blank">&#8599; ZADD reference</a></p>
 </script>
 
 <script type="text/javascript">
@@ -219,8 +1676,8 @@
         category: 'Redis',
         inputs: 1,
         outputs: 1,
-        color: "#ffffff",
-        icon: "redis.png",
+        color: "#f3c5bf",
+        icon: "redis-logo.png",
         paletteLabel: "redis cmd",
         defaults: {
             server: {
@@ -272,17 +1729,16 @@
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
     <div class="form-row">
-        <label for="node-input-topic"><i class="icon-tasks"></i> Topic/Key</label>
+        <label for="node-input-topic"><i class="fa fa-key"></i> Topic/Key</label>
         <input type="text" id="node-input-topic" placeholder="Topic">
     </div>
     <div class="form-row">
-        <label for="node-input-command"><i class="fa fa-unlock"></i> Command</label>
+        <label for="node-input-command"><i class="fa fa-terminal"></i> Command</label>
 
         <select id="node-input-command">
             <optgroup label="Core">
                 <option value="ACL">ACL</option>
                 <option value="APPEND">APPEND</option>
-                <option value="ASKING">ASKING</option>
                 <option value="AUTH">AUTH</option>
                 <option value="BGREWRITEAOF">BGREWRITEAOF</option>
                 <option value="BGSAVE">BGSAVE</option>
@@ -291,17 +1747,20 @@
                 <option value="BITFIELD_RO">BITFIELD_RO</option>
                 <option value="BITOP">BITOP</option>
                 <option value="BITPOS">BITPOS</option>
+                <option value="BLMOVE">BLMOVE</option>
+                <option value="BLMPOP">BLMPOP</option>
                 <option value="BLPOP">BLPOP</option>
                 <option value="BRPOP">BRPOP</option>
                 <option value="BRPOPLPUSH">BRPOPLPUSH</option>
+                <option value="BZMPOP">BZMPOP</option>
                 <option value="BZPOPMAX">BZPOPMAX</option>
                 <option value="BZPOPMIN">BZPOPMIN</option>
                 <option value="CLIENT">CLIENT</option>
                 <option value="CLUSTER">CLUSTER</option>
                 <option value="COMMAND">COMMAND</option>
                 <option value="CONFIG">CONFIG</option>
+                <option value="COPY">COPY</option>
                 <option value="DBSIZE">DBSIZE</option>
-                <option value="DEBUG">DEBUG</option>
                 <option value="DECR">DECR</option>
                 <option value="DECRBY">DECRBY</option>
                 <option value="DEL">DEL</option>
@@ -309,13 +1768,17 @@
                 <option value="DUMP">DUMP</option>
                 <option value="ECHO">ECHO</option>
                 <option value="EVAL">EVAL</option>
+                <option value="EVAL_RO">EVAL_RO</option>
                 <option value="EVALSHA">EVALSHA</option>
+                <option value="EVALSHA_RO">EVALSHA_RO</option>
                 <option value="EXEC">EXEC</option>
                 <option value="EXISTS">EXISTS</option>
                 <option value="EXPIRE">EXPIRE</option>
                 <option value="EXPIREAT">EXPIREAT</option>
-                <option value="FLUSHALL">FLUSHALL</option>
-                <option value="FLUSHDB">FLUSHDB</option>
+                <option value="EXPIRETIME">EXPIRETIME</option>
+                <option value="FCALL">FCALL</option>
+                <option value="FCALL_RO">FCALL_RO</option>
+                <option value="FUNCTION">FUNCTION</option>
                 <option value="GEOADD">GEOADD</option>
                 <option value="GEODIST">GEODIST</option>
                 <option value="GEOHASH">GEOHASH</option>
@@ -324,26 +1787,42 @@
                 <option value="GEORADIUSBYMEMBER">GEORADIUSBYMEMBER</option>
                 <option value="GEORADIUSBYMEMBER_RO">GEORADIUSBYMEMBER_RO</option>
                 <option value="GEORADIUS_RO">GEORADIUS_RO</option>
+                <option value="GEOSEARCH">GEOSEARCH</option>
+                <option value="GEOSEARCHSTORE">GEOSEARCHSTORE</option>
                 <option value="GET">GET</option>
                 <option value="GETBIT">GETBIT</option>
+                <option value="GETDEL">GETDEL</option>
+                <option value="GETEX">GETEX</option>
                 <option value="GETRANGE">GETRANGE</option>
                 <option value="GETSET">GETSET</option>
                 <option value="HDEL">HDEL</option>
                 <option value="HELLO">HELLO</option>
                 <option value="HEXISTS">HEXISTS</option>
+                <option value="HEXPIRE">HEXPIRE</option>
+                <option value="HEXPIREAT">HEXPIREAT</option>
+                <option value="HEXPIRETIME">HEXPIRETIME</option>
                 <option value="HGET">HGET</option>
                 <option value="HGETALL">HGETALL</option>
+                <option value="HGETDEL">HGETDEL</option>
+                <option value="HGETEX">HGETEX</option>
                 <option value="HINCRBY">HINCRBY</option>
                 <option value="HINCRBYFLOAT">HINCRBYFLOAT</option>
                 <option value="HKEYS">HKEYS</option>
                 <option value="HLEN">HLEN</option>
                 <option value="HMGET">HMGET</option>
                 <option value="HMSET">HMSET</option>
-                <option value="HOST:">HOST:</option>
+                <option value="HPERSIST">HPERSIST</option>
+                <option value="HPEXPIRE">HPEXPIRE</option>
+                <option value="HPEXPIREAT">HPEXPIREAT</option>
+                <option value="HPEXPIRETIME">HPEXPIRETIME</option>
+                <option value="HPTTL">HPTTL</option>
+                <option value="HRANDFIELD">HRANDFIELD</option>
                 <option value="HSCAN">HSCAN</option>
                 <option value="HSET">HSET</option>
+                <option value="HSETEX">HSETEX</option>
                 <option value="HSETNX">HSETNX</option>
                 <option value="HSTRLEN">HSTRLEN</option>
+                <option value="HTTL">HTTL</option>
                 <option value="HVALS">HVALS</option>
                 <option value="INCR">INCR</option>
                 <option value="INCRBY">INCRBY</option>
@@ -352,11 +1831,15 @@
                 <option value="KEYS">KEYS</option>
                 <option value="LASTSAVE">LASTSAVE</option>
                 <option value="LATENCY">LATENCY</option>
+                <option value="LCS">LCS</option>
                 <option value="LINDEX">LINDEX</option>
                 <option value="LINSERT">LINSERT</option>
                 <option value="LLEN">LLEN</option>
+                <option value="LMOVE">LMOVE</option>
+                <option value="LMPOP">LMPOP</option>
                 <option value="LOLWUT">LOLWUT</option>
                 <option value="LPOP">LPOP</option>
+                <option value="LPOS">LPOS</option>
                 <option value="LPUSH">LPUSH</option>
                 <option value="LPUSHX">LPUSHX</option>
                 <option value="LRANGE">LRANGE</option>
@@ -367,7 +1850,6 @@
                 <option value="MGET">MGET</option>
                 <option value="MIGRATE">MIGRATE</option>
                 <option value="MODULE">MODULE</option>
-                <option value="MONITOR">MONITOR</option>
                 <option value="MOVE">MOVE</option>
                 <option value="MSET">MSET</option>
                 <option value="MSETNX">MSETNX</option>
@@ -376,16 +1858,13 @@
                 <option value="PERSIST">PERSIST</option>
                 <option value="PEXPIRE">PEXPIRE</option>
                 <option value="PEXPIREAT">PEXPIREAT</option>
+                <option value="PEXPIRETIME">PEXPIRETIME</option>
                 <option value="PFADD">PFADD</option>
                 <option value="PFCOUNT">PFCOUNT</option>
-                <option value="PFDEBUG">PFDEBUG</option>
                 <option value="PFMERGE">PFMERGE</option>
-                <option value="PFSELFTEST">PFSELFTEST</option>
                 <option value="PING">PING</option>
-                <option value="POST">POST</option>
                 <option value="PSETEX">PSETEX</option>
                 <option value="PSUBSCRIBE">PSUBSCRIBE</option>
-                <option value="PSYNC">PSYNC</option>
                 <option value="PTTL">PTTL</option>
                 <option value="PUBLISH">PUBLISH</option>
                 <option value="PUBSUB">PUBSUB</option>
@@ -395,17 +1874,13 @@
                 <option value="READWRITE">READWRITE</option>
                 <option value="RENAME">RENAME</option>
                 <option value="RENAMENX">RENAMENX</option>
-                <option value="REPLCONF">REPLCONF</option>
-                <option value="REPLICAOF">REPLICAOF</option>
                 <option value="RESTORE">RESTORE</option>
-                <option value="RESTORE-ASKING">RESTORE-ASKING</option>
                 <option value="ROLE">ROLE</option>
                 <option value="RPOP">RPOP</option>
                 <option value="RPOPLPUSH">RPOPLPUSH</option>
                 <option value="RPUSH">RPUSH</option>
                 <option value="RPUSHX">RPUSHX</option>
                 <option value="SADD">SADD</option>
-                <option value="SAVE">SAVE</option>
                 <option value="SCAN">SCAN</option>
                 <option value="SCARD">SCARD</option>
                 <option value="SCRIPT">SCRIPT</option>
@@ -417,27 +1892,29 @@
                 <option value="SETEX">SETEX</option>
                 <option value="SETNX">SETNX</option>
                 <option value="SETRANGE">SETRANGE</option>
-                <option value="SHUTDOWN">SHUTDOWN</option>
                 <option value="SINTER">SINTER</option>
+                <option value="SINTERCARD">SINTERCARD</option>
                 <option value="SINTERSTORE">SINTERSTORE</option>
                 <option value="SISMEMBER">SISMEMBER</option>
-                <option value="SLAVEOF">SLAVEOF</option>
                 <option value="SLOWLOG">SLOWLOG</option>
                 <option value="SMEMBERS">SMEMBERS</option>
+                <option value="SMISMEMBER">SMISMEMBER</option>
                 <option value="SMOVE">SMOVE</option>
                 <option value="SORT">SORT</option>
+                <option value="SORT_RO">SORT_RO</option>
                 <option value="SPOP">SPOP</option>
+                <option value="SPUBLISH">SPUBLISH</option>
                 <option value="SRANDMEMBER">SRANDMEMBER</option>
                 <option value="SREM">SREM</option>
                 <option value="SSCAN">SSCAN</option>
-                <option value="STRALGO">STRALGO</option>
                 <option value="STRLEN">STRLEN</option>
                 <option value="SUBSCRIBE">SUBSCRIBE</option>
                 <option value="SUBSTR">SUBSTR</option>
+                <option value="SSUBSCRIBE">SSUBSCRIBE</option>
                 <option value="SUNION">SUNION</option>
                 <option value="SUNIONSTORE">SUNIONSTORE</option>
+                <option value="SUNSUBSCRIBE">SUNSUBSCRIBE</option>
                 <option value="SWAPDB">SWAPDB</option>
-                <option value="SYNC">SYNC</option>
                 <option value="TIME">TIME</option>
                 <option value="TOUCH">TOUCH</option>
                 <option value="TTL">TTL</option>
@@ -449,6 +1926,7 @@
                 <option value="WATCH">WATCH</option>
                 <option value="XACK">XACK</option>
                 <option value="XADD">XADD</option>
+                <option value="XAUTOCLAIM">XAUTOCLAIM</option>
                 <option value="XCLAIM">XCLAIM</option>
                 <option value="XDEL">XDEL</option>
                 <option value="XGROUP">XGROUP</option>
@@ -464,14 +1942,22 @@
                 <option value="ZADD">ZADD</option>
                 <option value="ZCARD">ZCARD</option>
                 <option value="ZCOUNT">ZCOUNT</option>
+                <option value="ZDIFF">ZDIFF</option>
+                <option value="ZDIFFSTORE">ZDIFFSTORE</option>
                 <option value="ZINCRBY">ZINCRBY</option>
+                <option value="ZINTER">ZINTER</option>
+                <option value="ZINTERCARD">ZINTERCARD</option>
                 <option value="ZINTERSTORE">ZINTERSTORE</option>
                 <option value="ZLEXCOUNT">ZLEXCOUNT</option>
+                <option value="ZMPOP">ZMPOP</option>
+                <option value="ZMSCORE">ZMSCORE</option>
                 <option value="ZPOPMAX">ZPOPMAX</option>
                 <option value="ZPOPMIN">ZPOPMIN</option>
+                <option value="ZRANDMEMBER">ZRANDMEMBER</option>
                 <option value="ZRANGE">ZRANGE</option>
                 <option value="ZRANGEBYLEX">ZRANGEBYLEX</option>
                 <option value="ZRANGEBYSCORE">ZRANGEBYSCORE</option>
+                <option value="ZRANGESTORE">ZRANGESTORE</option>
                 <option value="ZRANK">ZRANK</option>
                 <option value="ZREM">ZREM</option>
                 <option value="ZREMRANGEBYLEX">ZREMRANGEBYLEX</option>
@@ -483,6 +1969,7 @@
                 <option value="ZREVRANK">ZREVRANK</option>
                 <option value="ZSCAN">ZSCAN</option>
                 <option value="ZSCORE">ZSCORE</option>
+                <option value="ZUNION">ZUNION</option>
                 <option value="ZUNIONSTORE">ZUNIONSTORE</option>
             </optgroup>
             <optgroup label="Modules">
@@ -656,13 +2143,111 @@
     </div>
     <div class="form-row">
         <label for="node-input-block">&nbsp;</label>
-        <input type="checkbox" id="node-input-block" style="display:inline-block; width:15px; vertical-align:baseline;"> Block Commands(Force use new connection)
+        <input type="checkbox" id="node-input-block" style="display:inline-block; width:15px; vertical-align:baseline;"> Block Commands (Force use new connection)
     </div>
 </script>
 
 <script type="text/x-red" data-help-name="redis-command">
-    <p>Redis Command</p>
-    <p>Execute command inside Redis sending payload array as parameters and return the result as payload.</p>
+<p>Executes any Redis command and returns the result as <code>msg.payload</code>.
+Use this node for operations not covered by the dedicated <em>redis-in</em> and
+<em>redis-out</em> nodes, such as GET, SET, EXPIRE, HSET, or administrative commands.</p>
+
+<h3>Inputs</h3>
+<dl class="message-properties">
+    <dt>topic <span class="property-type">string (optional)</span></dt>
+    <dd>The primary Redis key. Overrides the node&rsquo;s <strong>Topic/Key</strong> setting.
+        Passed as the first argument after the command name.</dd>
+    <dt>payload <span class="property-type">string | array | object (optional)</span></dt>
+    <dd>Additional arguments for the command.
+        A non-empty string, non-empty JSON array, or non-empty object overrides
+        the node&rsquo;s static <strong>Params</strong>. A JSON array is spread as
+        individual arguments. Numeric, boolean, empty string, empty array, empty
+        object, <code>null</code>, and missing payload values are treated as no
+        payload and the node falls back to <strong>Params</strong> or
+        <strong>Topic / Key</strong>.</dd>
+</dl>
+
+<h3>Outputs</h3>
+<dl class="message-properties">
+    <dt>payload <span class="property-type">string | number | array | null</span></dt>
+    <dd>The value returned by Redis for the command.</dd>
+</dl>
+
+<h3>Properties</h3>
+<dl class="message-properties">
+    <dt>Server</dt>
+    <dd>The <em>redis-config</em> node that defines the connection.</dd>
+    <dt>Topic / Key</dt>
+    <dd>The primary Redis key for the command.
+        Passed as the first positional argument.
+        Leave blank for commands that take no key
+        (e.g. <code>DBSIZE</code>, <code>INFO</code>, <code>PING</code>).</dd>
+    <dt>Command</dt>
+    <dd>The Redis command to run, selected from the dropdown.</dd>
+    <dt>Params <span class="property-type">JSON array</span></dt>
+    <dd>Static extra arguments as a JSON array.
+        Used only when <code>msg.payload</code> is absent or empty.
+        Example: <code>[60]</code> for the seconds argument of <code>EXPIRE</code>.</dd>
+    <dt>Block Commands</dt>
+    <dd>When checked, this node gets its own dedicated Redis connection instead of sharing
+        the common pooled connection. <strong>Required</strong> for commands that hold the
+        connection open: <code>BLPOP</code>, <code>BRPOP</code>, <code>BLMOVE</code>,
+        <code>BZPOPMIN</code>, <code>BZPOPMAX</code>, <code>BLMPOP</code>, etc.</dd>
+</dl>
+
+<h3>How arguments are assembled</h3>
+<p>The final Redis call is built from <strong>Command</strong> + <strong>Topic/Key</strong>
++ <strong>Payload / Params</strong>:</p>
+<ul>
+    <li>Topic present, payload present &rarr;
+        <code>COMMAND &lt;topic&gt; &lt;payload&gt;</code></li>
+    <li>Payload present, no topic &rarr;
+        <code>COMMAND &lt;payload&gt;</code></li>
+    <li>Neither present &rarr;
+        <code>COMMAND</code></li>
+</ul>
+<p>When payload is a JSON array each element is passed as a separate argument.
+Falsy or empty payload values are ignored by this node&rsquo;s current runtime logic,
+so commands that need values such as <code>0</code>, <code>false</code>, or an empty
+string should pass them inside a non-empty array.</p>
+
+<h3>Examples</h3>
+<ul>
+    <li><strong>SET:</strong> Topic <code>mykey</code>, payload <code>"hello"</code>
+        &rarr; <code>SET mykey hello</code></li>
+    <li><strong>GET:</strong> Topic <code>mykey</code>, no payload
+        &rarr; <code>GET mykey</code></li>
+    <li><strong>EXPIRE:</strong> Topic <code>mykey</code>, payload <code>[60]</code>
+        &rarr; <code>EXPIRE mykey 60</code></li>
+    <li><strong>HSET:</strong> Topic <code>myhash</code>,
+        payload <code>["field1","val1","field2","val2"]</code>
+        &rarr; <code>HSET myhash field1 val1 field2 val2</code></li>
+    <li><strong>XGROUP CREATE:</strong> Command <code>XGROUP</code>, no topic,
+        payload <code>["CREATE","mystream","mygroup","0","MKSTREAM"]</code>
+        &rarr; <code>XGROUP CREATE mystream mygroup 0 MKSTREAM</code></li>
+    <li><strong>DBSIZE:</strong> Command <code>DBSIZE</code>, no topic, no payload
+        &rarr; <code>DBSIZE</code></li>
+</ul>
+
+<h3>Managing scripts and functions</h3>
+<p>This node is the home for Lua script-cache and Redis Functions management:
+<code>SCRIPT DEBUG/EXISTS/FLUSH/KILL/LOAD</code> and
+<code>FUNCTION DELETE/DUMP/FLUSH/KILL/LIST/LOAD/RESTORE/STATS</code>. Pick
+<code>SCRIPT</code> or <code>FUNCTION</code> as the command and put the subcommand and
+its arguments in <code>msg.payload</code>:</p>
+<ul>
+    <li><strong>SCRIPT LOAD:</strong> Command <code>SCRIPT</code>,
+        payload <code>["LOAD", "return 1"]</code> &rarr; returns the SHA1.</li>
+    <li><strong>FUNCTION LOAD:</strong> Command <code>FUNCTION</code>,
+        payload <code>["LOAD", "REPLACE", "#!lua name=mylib\nredis.register_function('f', function() return 1 end)"]</code></li>
+    <li><strong>FUNCTION LIST / STATS / FLUSH:</strong> Command <code>FUNCTION</code>,
+        payload <code>["LIST"]</code> / <code>["STATS"]</code> / <code>["FLUSH"]</code>.</li>
+</ul>
+<p>The <em>redis-lua-script</em> node handles execution (<code>EVAL</code>/<code>EVALSHA</code>/<code>FCALL</code>
+and their read-only variants).</p>
+
+<p>Full Redis command reference:
+<a href="https://redis.io/commands/" target="_blank">&#8599; redis.io/commands</a></p>
 </script>
 
 
@@ -672,8 +2257,8 @@
         category: 'Redis',
         inputs: 1,
         outputs: 1,
-        color: "#ffffff",
-        icon: "redis.png",
+        color: "#f3c5bf",
+        icon: "redis-logo.png",
         paletteLabel: "redis lua",
         defaults: {
             server: {
@@ -695,6 +2280,23 @@
             },
             block: {
                 value: false
+            },
+            mode: {
+                value: "script"
+            },
+            readonly: {
+                value: false
+            },
+            fname: {
+                value: "",
+                validate: function (v) {
+                    // Mandatory in Function mode. Reads the live select when the
+                    // editor is open, the saved value during flow validation.
+                    var mode = $("#node-input-mode").length
+                        ? $("#node-input-mode").val()
+                        : this.mode;
+                    return (mode || "script") !== "function" || /\S/.test(v || "");
+                }
             }
         },
         label: function () {
@@ -705,17 +2307,127 @@
             $("#node-input-keyval").spinner({
                 min: 0
             });
+
+            // Fills the editor down to the bottom of the tray. Measures the
+            // real remaining space in the DOM (tray-body bottom minus the
+            // editor's top) because the height Node-RED passes to oneditresize
+            // and the form's own height both under-report it.
+            that.resizeLuaEditor = function () {
+                var editor = $("#node-input-func-editor");
+                if (!editor.length) {
+                    return;
+                }
+                var height;
+                var trayBody = editor.closest(".red-ui-tray-body");
+                if (trayBody.length) {
+                    height = trayBody[0].getBoundingClientRect().bottom
+                        - editor[0].getBoundingClientRect().top - 20;
+                } else {
+                    // Fallback for editors without the tray-body class: derive
+                    // from the size oneditresize received.
+                    var size = that._traySize;
+                    height = size && size.height ? size.height : $("#dialog-form").height();
+                    var rows = $("#dialog-form>div:not(.node-text-editor-row)");
+                    for (var i = 0; i < rows.length; i++) {
+                        height -= $(rows[i]).outerHeight(true);
+                    }
+                    var editorRow = $("#dialog-form>div.node-text-editor-row");
+                    height -= (parseInt(editorRow.css("marginTop")) + parseInt(editorRow.css("marginBottom")));
+                }
+                if (!(height > 150)) {
+                    height = 150; // never collapse the editor to a sliver
+                }
+                $(".node-text-editor").css("height", height + "px");
+                if (that.editor) {
+                    that.editor.resize();
+                }
+            };
+
+            // Starter templates. Switching mode only swaps the editor content
+            // while it is still pristine (the other mode's untouched template),
+            // so user-written code is never clobbered.
+            var SCRIPT_TEMPLATE = "\nreturn nil";
+            var FUNCTION_TEMPLATE = [
+                "#!lua name=mylib",
+                "",
+                "redis.register_function('myfunc', function(keys, args)",
+                "  return 'Hello, world!'",
+                "end)",
+            ].join("\n");
+
+            function seedTemplateForMode(isFunction) {
+                if (!that.editor) {
+                    return;
+                }
+                var current = that.editor.getValue().trim();
+                if (isFunction && (current === "" || current === SCRIPT_TEMPLATE.trim())) {
+                    that.editor.setValue(FUNCTION_TEMPLATE, -1);
+                    if (!/\S/.test($("#node-input-fname").val() || "")) {
+                        // trigger("change") makes Node-RED revalidate so the
+                        // required-field error styling clears immediately.
+                        $("#node-input-fname").val("myfunc").trigger("change");
+                    }
+                } else if (!isFunction && current === FUNCTION_TEMPLATE.trim()) {
+                    that.editor.setValue(SCRIPT_TEMPLATE, -1);
+                }
+            }
+
+            // Script mode shows the Stored checkbox; Function mode shows the
+            // Function name field and relabels the editor as the library source.
+            function updateLuaModeVisibility() {
+                var isFunction = $("#node-input-mode").val() === "function";
+                $("#redis-lua-fname-row").toggle(isFunction);
+                $("#redis-lua-stored-row").toggle(!isFunction);
+                $("#redis-lua-editor-label").text(isFunction ? "Lua Library" : "Lua Script");
+                seedTemplateForMode(isFunction);
+                // Showing/hiding rows changes the space left for the editor.
+                that.resizeLuaEditor();
+            }
+            // Nodes saved before the mode field existed (or with a cleared value)
+            // must open as Script mode.
+            $("#node-input-mode").val(this.mode === "function" ? "function" : "script");
+            $("#node-input-mode").on("change", updateLuaModeVisibility);
+            updateLuaModeVisibility();
+
             this.editor = RED.editor.createEditor({
                 id: 'node-input-func-editor',
                 mode: 'ace/mode/lua',
                 value: $("#node-input-func").val()
             });
             RED.library.create({
-                url: "functions", // where to get the data from
-                type: "function.lua", // the type of object the library is for
-                editor: this.editor, // the field name the main text body goes to
+                url: "functions",
+                type: "lua",
+                editor: this.editor,
                 mode: "ace/mode/lua",
-                fields: ['name', 'keyval', 'stored']
+                ext: "lua",
+                fields: [
+                    'name',
+                    'keyval',
+                    'fname',
+                    {
+                        name: 'mode',
+                        get: function() { return $("#node-input-mode").val(); },
+                        set: function(val) {
+                            $("#node-input-mode").val(val || "script");
+                            updateLuaModeVisibility();
+                        }
+                    },
+                    {
+                        name: 'stored',
+                        get: function() { return $("#node-input-stored").is(":checked") ? "true" : "false"; },
+                        set: function(val) { $("#node-input-stored").prop("checked", val === "true"); }
+                    },
+                    {
+                        name: 'readonly',
+                        get: function() { return $("#node-input-readonly").is(":checked") ? "true" : "false"; },
+                        set: function(val) { $("#node-input-readonly").prop("checked", val === "true"); }
+                    },
+                    {
+                        name: 'block',
+                        get: function() { return $("#node-input-block").is(":checked") ? "true" : "false"; },
+                        set: function(val) { $("#node-input-block").prop("checked", val === "true"); }
+                    }
+                ]
             });
             this.editor.focus();
         },
@@ -731,18 +2443,14 @@
                 }
             }
             $("#node-input-func").val(this.editor.getValue());
-            delete this.editor;
+            this.editor.destroy();
+            this.editor = null;
         },
         oneditresize: function (size) {
-            var rows = $("#dialog-form>div:not(.node-text-editor-row)");
-            var height = $("#dialog-form").height();
-            for (var i = 0; i < rows.size(); i++) {
-                height -= $(rows[i]).outerHeight(true);
+            this._traySize = size;
+            if (this.resizeLuaEditor) {
+                this.resizeLuaEditor();
             }
-            var editorRow = $("#dialog-form>div.node-text-editor-row");
-            height -= (parseInt(editorRow.css("marginTop")) + parseInt(editorRow.css("marginBottom")));
-            $(".node-text-editor").css("height", height + "px");
-            this.editor.resize();
         }
     });
 </script>
@@ -752,42 +2460,142 @@
         <label for="node-input-server"><i class="fa fa-globe"></i> Server</label>
         <input type="text" id="node-input-server" placeholder="Server">
     </div>
-    <div class="form-row">
-        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-        <input type="text" id="node-input-name" placeholder="Name">
-    </div>
-    
-    <div class="form-row">
-        <label>&nbsp;</label>
-        <input type="checkbox" id="node-input-stored" style="display: inline-block; width: auto; vertical-align: top;">
-        <label for="node-input-stored" style="width: 70%;">Stored Script</label>
+    <!-- Flex keeps label + input + the injected library button on one line; the
+         100px label basis and 4px gap reproduce the standard form-row metrics
+         (inline-block 100px label + whitespace) so inputs stay column-aligned. -->
+    <div class="form-row" style="display:flex; align-items:center; flex-wrap:nowrap; column-gap:4px;">
+        <label for="node-input-name" style="flex:0 0 100px; margin-right:0;"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name" style="flex:1 1 auto; width:auto; min-width:50px;">
     </div>
     <div class="form-row">
-        <label for="node-input-keyval"><i class="fa fa-random"></i> Keys</label>
+        <label for="node-input-mode"><i class="fa fa-cogs"></i> Mode</label>
+        <select id="node-input-mode" style="width:auto;">
+            <option value="script">Script (EVAL / EVALSHA)</option>
+            <option value="function">Function (FCALL)</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-keyval"><i class="fa fa-list-ol"></i> Keys</label>
         <input id="node-input-keyval" style="width: 60px; height: 1.7em;" value="0">
     </div>
+    <div class="form-row" id="redis-lua-fname-row">
+        <label for="node-input-fname"><i class="fa fa-bolt"></i> Function</label>
+        <input type="text" id="node-input-fname" placeholder="registered function name (required)">
+    </div>
+    <div class="form-row" id="redis-lua-stored-row">
+        <label>&nbsp;</label>
+        <input type="checkbox" id="node-input-stored" style="display:inline-block; width:15px; vertical-align:baseline;">
+        <label for="node-input-stored" style="width:auto; margin-left:4px;">Stored Script (EVALSHA)</label>
+    </div>
+    <div class="form-row">
+        <label>&nbsp;</label>
+        <input type="checkbox" id="node-input-readonly" style="display:inline-block; width:15px; vertical-align:baseline;">
+        <label for="node-input-readonly" style="width:auto; margin-left:4px;" title="Uses EVAL_RO / EVALSHA_RO / FCALL_RO">Read-only</label>
+    </div>
+    <div class="form-row">
+        <label>&nbsp;</label>
+        <input type="checkbox" id="node-input-block" style="display:inline-block; width:15px; vertical-align:baseline;">
+        <label for="node-input-block" style="width:auto; margin-left:4px;">Block Commands (dedicated connection)</label>
+    </div>
     <div class="form-row" style="margin-bottom: 0px;">
-        <label for="node-input-func"><i class="fa fa-wrench"></i> Lua Script</label>
+        <label for="node-input-func"><i class="fa fa-code"></i> <span id="redis-lua-editor-label">Lua Script</span></label>
         <input type="hidden" id="node-input-func" autofocus="autofocus">
         <input type="hidden" id="node-input-noerr">
     </div>
     <div class="form-row node-text-editor-row">
         <div style="height: 250px;" class="node-text-editor" id="node-input-func-editor"></div>
     </div>
-    <div class="form-row">
-        <label for="node-input-block">&nbsp;</label>
-        <input type="checkbox" id="node-input-block" style="display:inline-block; width:15px; vertical-align:baseline;"> Block Commands(Force use new connection)
-    </div>
 </script>
 
 <script type="text/x-red" data-help-name="redis-lua-script">
-    <p>Redis Lua</p>
-    <p>Execute lua script inside Redis sending payload array as parameters and return the result as payload.</p>
-    <p>Options</p>
-    <p>Stored: Set if you want use SCRIPT LOAD and EVALSHA to run script</p>
-    <p>Keys: Number of keys that you send to the lua script</p>
-    <p>Script: Lua script</p>
-    <p>Payload: you need send all keys before, after send all values.</p>
+<p>Executes server-side Lua atomically. In <strong>Script</strong> mode it runs a Lua
+script body with <code>EVAL</code>/<code>EVALSHA</code> (or their read-only
+<code>_RO</code> variants); in <strong>Function</strong> mode it loads a Redis Functions
+library and calls a registered function with <code>FCALL</code>/<code>FCALL_RO</code>.</p>
+
+<h3>Inputs</h3>
+<dl class="message-properties">
+    <dt>payload <span class="property-type">array</span></dt>
+    <dd>Arguments for the script, as a flat array.
+        The first <strong>Keys</strong> elements are mapped to <code>KEYS[1]</code>,
+        <code>KEYS[2]</code>, &hellip; inside the script.
+        All remaining elements become <code>ARGV[1]</code>, <code>ARGV[2]</code>, &hellip;<br>
+        Must be an array when <strong>Keys</strong> is greater than 0.</dd>
+</dl>
+
+<h3>Outputs</h3>
+<dl class="message-properties">
+    <dt>payload <span class="property-type">string | number | array | null</span></dt>
+    <dd>The value returned by the Lua script via <code>return</code>.</dd>
+</dl>
+
+<h3>Properties</h3>
+<dl class="message-properties">
+    <dt>Server</dt>
+    <dd>The <em>redis-config</em> node that defines the connection.</dd>
+    <dt>Mode</dt>
+    <dd><strong>Script</strong> runs the Lua body in the editor. <strong>Function</strong>
+        treats the editor as a Redis Functions <em>library</em> source (must start with the
+        <code>#!lua name=&lt;lib&gt;</code> shebang and call <code>redis.register_function</code>);
+        the node runs <code>FUNCTION LOAD REPLACE</code> on deploy/reconnect and calls the
+        function named in <strong>Function</strong> with <code>FCALL</code>.</dd>
+    <dt>Read-only</dt>
+    <dd>Uses the read-only command variant: <code>EVAL_RO</code>/<code>EVALSHA_RO</code> in
+        Script mode, <code>FCALL_RO</code> in Function mode. Read-only functions must be
+        registered with the <code>no-writes</code> flag.</dd>
+    <dt>Function</dt>
+    <dd>(Function mode, <strong>required</strong>) The registered function name to invoke.
+        Both the library source and the function name are mandatory in Function mode; a
+        missing one is a configuration error and messages fail without contacting Redis.
+        Give each Function node a <em>unique</em> library name — two nodes sharing a
+        <code>#!lua name=&lt;lib&gt;</code> overwrite each other&rsquo;s library on every
+        (re)load.</dd>
+    <dt>Stored Script</dt>
+    <dd>When enabled, the script is pre-loaded into Redis with <code>SCRIPT LOAD</code>
+        the first time the node deploys, and subsequent calls use <code>EVALSHA</code>
+        (the script&rsquo;s SHA-1 hash) instead of sending the full script text each time.
+        Reduces network traffic for large or frequently called scripts.</dd>
+    <dt>Keys <span class="property-type">number</span></dt>
+    <dd>How many elements at the start of <code>msg.payload</code> are Redis key names.
+        These become <code>KEYS[n]</code> in the script; the rest become
+        <code>ARGV[n]</code>. Set to <code>0</code> if the script uses no keys.</dd>
+    <dt>Lua Script</dt>
+    <dd>The Lua code to execute. The full Redis Lua environment is available,
+        including <code>redis.call()</code> (raises on error) and
+        <code>redis.pcall()</code> (returns error as table).</dd>
+    <dt>Block Commands</dt>
+    <dd>Forces a dedicated connection for this node instead of the shared pool.
+        Recommended when the script may hold the connection for an extended period.</dd>
+</dl>
+
+<h3>Managing scripts and functions</h3>
+<p>This node only <em>executes</em> scripts and functions. All <code>SCRIPT</code> and
+<code>FUNCTION</code> management/admin subcommands run through the <em>redis-command</em>
+node — see its help for the subcommand list and payload examples.</p>
+
+<h3>Examples</h3>
+
+<p><strong>Atomic get-and-delete</strong> &mdash; Keys: <code>1</code>,
+payload: <code>["mykey"]</code></p>
+<pre><code>local v = redis.call('GET', KEYS[1])
+redis.call('DEL', KEYS[1])
+return v</code></pre>
+
+<p><strong>Conditional increment</strong> &mdash; Keys: <code>1</code>,
+payload: <code>["counter", "100"]</code>
+(cap at 100 passed as ARGV[1])</p>
+<pre><code>local cur = tonumber(redis.call('GET', KEYS[1])) or 0
+local cap = tonumber(ARGV[1])
+if cur < cap then
+  return redis.call('INCR', KEYS[1])
+end
+return cur</code></pre>
+
+<p>
+    <a href="https://redis.io/commands/eval/" target="_blank">&#8599; EVAL reference</a>
+    &nbsp;&nbsp;
+    <a href="https://redis.io/docs/manual/programmability/eval-intro/" target="_blank">&#8599; Redis Lua scripting guide</a>
+</p>
 </script>
 
 
@@ -798,8 +2606,8 @@
         category: 'Redis',
         inputs: 0,
         outputs: 0,
-        color: "#ffffff",
-        icon: "redis.png",
+        color: "#f3c5bf",
+        icon: "redis-logo.png",
         paletteLabel: "instance",
         defaults: {
             server: {
@@ -834,11 +2642,11 @@
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
     <div class="form-row">
-        <label for="node-input-topic"><i class="icon-tasks"></i> Topic</label>
+        <label for="node-input-topic"><i class="fa fa-key"></i> Topic</label>
         <input type="text" id="node-input-topic" placeholder="Topic">
     </div>
     <div class="form-row">
-        <label for="node-input-location"><i class="fa fa-unlock"></i> Context</label>
+        <label for="node-input-location"><i class="fa fa-terminal"></i> Context</label>
         <select id="node-input-location">
             <option value="flow" selected>Flow</option>
             <option value="global">Global</option>
@@ -847,8 +2655,52 @@
 </script>
 
 <script type="text/x-red" data-help-name="redis-instance">
-    <p>Redis Instance</p>
-    <p>Injects a Redis connection on flow or global context.</p> 
-    <p>The Topic is the var name of redis.</p>
-    <p></p>
+<p>Stores a raw <a href="https://github.com/redis/ioredis" target="_blank">ioredis</a>
+client instance into Node-RED&rsquo;s flow or global context so that
+<em>Function</em> nodes and other context-aware nodes can call any Redis command
+directly without going through a dedicated redis node.</p>
+
+<h3>Properties</h3>
+<dl class="message-properties">
+    <dt>Server</dt>
+    <dd>The <em>redis-config</em> node that defines the connection.</dd>
+    <dt>Topic</dt>
+    <dd>The context variable name under which the ioredis client is stored.
+        For example, setting this to <code>redis</code> makes the client
+        available as <code>flow.get("redis")</code> or
+        <code>global.get("redis")</code>.</dd>
+    <dt>Context</dt>
+    <dd>
+        <ul>
+            <li><strong>Flow</strong> &mdash; the client is accessible to all nodes
+                in the same flow tab via <code>flow.get("&lt;topic&gt;")</code>.</li>
+            <li><strong>Global</strong> &mdash; the client is accessible to every
+                flow in the Node-RED instance via
+                <code>global.get("&lt;topic&gt;")</code>.</li>
+        </ul>
+    </dd>
+</dl>
+
+<h3>Usage in a Function node</h3>
+<pre><code>// Retrieve the client stored by redis-instance
+const redis = flow.get("redis");
+if (!redis) { node.error("Redis client not ready"); return; }
+
+// Any ioredis method is available
+await redis.set("mykey", "hello");
+const value = await redis.get("mykey");
+msg.payload = value;
+return msg;</code></pre>
+
+<p><strong>Notes</strong></p>
+<ul>
+    <li>The client is placed in context when the node deploys and removed when
+        the flow stops. Always guard against <code>null</code> before use.</li>
+    <li>Each <em>redis-instance</em> node stores its own ioredis client in context.
+        Avoid using blocking commands (<code>BLPOP</code>, <code>BRPOP</code>, etc.)
+        on that stored client unless it is dedicated to that blocking workflow.</li>
+    <li>All ioredis methods and options are available. See the
+        <a href="https://github.com/redis/ioredis#basic-usage" target="_blank">&#8599; ioredis documentation</a>
+        for the full API.</li>
+</ul>
 </script>

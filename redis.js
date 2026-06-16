@@ -1,35 +1,527 @@
 module.exports = function (RED) {
   "use strict";
   const Redis = require("ioredis");
-  const async = require("async");
   let connections = {};
   let usedConn = {};
 
-function RedisConfig(n) {
-    RED.nodes.createNode(this, n);
-    this.name = n.name;
-    this.cluster = n.cluster;
-    if (this.optionsType === "") {
-      this.options = n.options;
+  const GRACEFUL_QUIT_TIMEOUT_MS = 2000;
+  const TEST_CONNECTION_TIMEOUT_MS = 10000;
+  const BLOCKING_RETRY_BASE_MS = 250;
+  const BLOCKING_RETRY_CAP_MS = 5000;
+
+  // Equal-jitter capped exponential backoff for supervised blocking-input loops.
+  // Never returns 0, so an immediately-rejecting command cannot become a busy loop.
+  function blockingBackoffDelay(attempt) {
+    const ceil = Math.min(BLOCKING_RETRY_CAP_MS, BLOCKING_RETRY_BASE_MS * Math.pow(2, attempt));
+    const half = ceil / 2;
+    return Math.floor(half + Math.random() * half);
+  }
+
+  // Interruptible backoff sleep. Stores a canceller on the node so the close
+  // handler can wake a pending retry immediately on redeploy/shutdown.
+  function blockingSleep(ms, node) {
+    return new Promise(function (resolve) {
+      var finish = function () {
+        node._blockingRetryCancel = null;
+        resolve();
+      };
+      var timer = setTimeout(finish, ms);
+      node._blockingRetryCancel = function () {
+        clearTimeout(timer);
+        finish();
+      };
+    });
+  }
+
+  // Attaches ioredis connection-event listeners to drive node.status.
+  // Returns a cleanup function that removes all attached listeners.
+  // onReady is optional; defaults to showing green "connected".
+  function attachStatusListeners(node, client, onReady) {
+    if (typeof client.setMaxListeners === "function") {
+      // Shared config connections can legitimately have many node status listeners.
+      client.setMaxListeners(0);
+    }
+    var _onReady =
+      onReady ||
+      function () {
+        node.status({ fill: "green", shape: "dot", text: "connected" });
+      };
+    var onError = function (e) {
+      node.status({ fill: "red", shape: "ring", text: e.message });
+    };
+    var onClose = function () {
+      node.status({ fill: "yellow", shape: "ring", text: "disconnected" });
+    };
+    var onReconnecting = function () {
+      node.status({ fill: "yellow", shape: "ring", text: "reconnecting" });
+    };
+    var onEnd = function () {
+      node.status({ fill: "red", shape: "ring", text: "disconnected" });
+    };
+
+    client.on("ready", _onReady);
+    client.on("error", onError);
+    client.on("close", onClose);
+    client.on("reconnecting", onReconnecting);
+    client.on("end", onEnd);
+
+    // Set status immediately based on the client's current state (handles shared connections).
+    var s = client.status;
+    if (s === "ready") {
+      _onReady();
+    } else if (s === "end") {
+      onEnd();
+    } else if (s === "reconnecting") {
+      onReconnecting();
     } else {
-      RED.util.evaluateNodeProperty(n.options, n.optionsType,this,undefined,(err,value) => {
-          if(!err) {
-            // Check if value is a string and optionsType is "env"
-            if (typeof value === 'string' && n.optionsType === "env") {
-                try {
-                    this.options = JSON.parse(value); // Attempt to parse JSON
-                } catch (e) {
-                    console.warn("Failed to parse env as JSON string in redis-config node, use plain value:", e);
-                    this.options = value;  // Keep the value as is if it's not valid JSON
-                }
-            } else {
-                this.options = value;
-            }
-          }
+      node.status({ fill: "yellow", shape: "ring", text: "connecting" });
+    }
+
+    return function () {
+      client.removeListener("ready", _onReady);
+      client.removeListener("error", onError);
+      client.removeListener("close", onClose);
+      client.removeListener("reconnecting", onReconnecting);
+      client.removeListener("end", onEnd);
+    };
+  }
+
+  function setDefault(target, key, value) {
+    if (!Object.prototype.hasOwnProperty.call(target, key)) {
+      target[key] = value;
+    }
+    return target;
+  }
+
+  function redactValue(value) {
+    if (Array.isArray(value)) {
+      return value.map(redactValue);
+    }
+    if (value && typeof value === "object") {
+      var copy = {};
+      Object.keys(value).forEach(function (key) {
+        if (/password|pass|secret|token|auth/i.test(key)) {
+          copy[key] = "[redacted]";
+        } else if (key === "args" && value.name && /^(auth|hello)$/i.test(String(value.name))) {
+          copy[key] = value[key].map(function () {
+            return "[redacted]";
+          });
+        } else {
+          copy[key] = redactValue(value[key]);
+        }
+      });
+      return copy;
+    }
+    return value;
+  }
+
+  function safeStringify(value) {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch (e) {
+      return String(value);
+    }
+  }
+
+  function serializeError(err) {
+    var out = {
+      name: err && err.name,
+      message: err && err.message,
+      stack: err && err.stack,
+    };
+    Object.getOwnPropertyNames(err || {}).forEach(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(out, key)) {
+        out[key] = err[key];
+      }
+    });
+    return redactValue(out);
+  }
+
+  function addVerboseLog(log, message, data) {
+    var entry = {
+      at: new Date().toISOString(),
+      message: message,
+    };
+    if (data !== undefined) {
+      entry.data = data;
+    }
+    log.push(entry);
+  }
+
+  function withTimeout(promise, label) {
+    var timer;
+    return Promise.race([
+      promise,
+      new Promise(function (_resolve, reject) {
+        timer = setTimeout(function () {
+          reject(new Error(label + " timed out after " + TEST_CONNECTION_TIMEOUT_MS + "ms"));
+        }, TEST_CONNECTION_TIMEOUT_MS);
+      }),
+    ]).finally(function () {
+      clearTimeout(timer);
+    });
+  }
+
+  function buildClusterClient(clusterOptions, clientOptions) {
+    if (Array.isArray(clusterOptions)) {
+      var identityNode = clusterOptions.find(function (nodeOptions) {
+        return nodeOptions && nodeOptions.dnsLookupStrategy === "identity";
+      });
+      var authNode = clusterOptions.find(function (nodeOptions) {
+        return (
+          nodeOptions &&
+          (nodeOptions.username ||
+            nodeOptions.password ||
+            Object.prototype.hasOwnProperty.call(nodeOptions, "tls"))
+        );
+      });
+      var startupNodes = clusterOptions.map(function (nodeOptions) {
+        var startupNode = Object.assign({}, nodeOptions);
+        delete startupNode.dnsLookupStrategy;
+        return startupNode;
+      });
+
+      var clusterClientOptions = Object.assign({}, clientOptions || {});
+      if (authNode) {
+        clusterClientOptions.redisOptions = Object.assign(
+          {},
+          clusterClientOptions.redisOptions || {}
+        );
+        if (authNode.username) {
+          clusterClientOptions.redisOptions.username = authNode.username;
+        }
+        if (authNode.password) {
+          clusterClientOptions.redisOptions.password = authNode.password;
+        }
+        if (Object.prototype.hasOwnProperty.call(authNode, "tls")) {
+          clusterClientOptions.redisOptions.tls = authNode.tls === true ? {} : authNode.tls;
+        }
+      }
+
+      if (identityNode) {
+        clusterClientOptions.dnsLookup = function (address, callback) {
+          callback(null, address);
+        };
+        clusterClientOptions.redisOptions = clusterClientOptions.redisOptions || {};
+        if (!Object.prototype.hasOwnProperty.call(clusterClientOptions.redisOptions, "tls")) {
+          clusterClientOptions.redisOptions.tls = {};
+        }
+      }
+
+      return new Redis.Cluster(startupNodes, clusterClientOptions);
+    }
+    if (clientOptions) {
+      return new Redis.Cluster(clusterOptions, clientOptions);
+    }
+    return new Redis.Cluster(clusterOptions);
+  }
+
+  function isClusterConnection(options, cluster) {
+    return cluster === true || cluster === "true" || Array.isArray(options);
+  }
+
+  function buildRedisClient(options, cluster) {
+    if (isClusterConnection(options, cluster)) {
+      return buildClusterClient(options);
+    }
+    return new Redis(options);
+  }
+
+  function testRedisOptions(base) {
+    var options = Object.assign({}, base || {});
+    setDefault(options, "connectTimeout", 5000);
+    setDefault(options, "maxRetriesPerRequest", 1);
+    setDefault(options, "retryStrategy", null);
+    setDefault(options, "showFriendlyErrorStack", true);
+    setDefault(options, "lazyConnect", true);
+    return options;
+  }
+
+  function buildTestRedisClient(options, cluster) {
+    var redisOptions = testRedisOptions({});
+    if (isClusterConnection(options, cluster)) {
+      return buildClusterClient(options, {
+        lazyConnect: true,
+        slotsRefreshTimeout: 5000,
+        redisOptions: redisOptions,
+      });
+    }
+    if (typeof options === "string") {
+      return new Redis(options, redisOptions);
+    }
+    return new Redis(testRedisOptions(options));
+  }
+
+  function attachVerboseRedisLogs(client, log) {
+    var listeners = {};
+    ["wait", "connecting", "connect", "ready", "close", "reconnecting", "end"].forEach(
+      function (eventName) {
+        listeners[eventName] = function (value) {
+          addVerboseLog(log, "redis event: " + eventName, value);
+        };
+        client.on(eventName, listeners[eventName]);
+      }
+    );
+    listeners.error = function (err) {
+      addVerboseLog(log, "redis event: error", serializeError(err));
+    };
+    client.on("error", listeners.error);
+    return function () {
+      Object.keys(listeners).forEach(function (eventName) {
+        client.removeListener(eventName, listeners[eventName]);
+      });
+    };
+  }
+
+  function normalizeEnvName(value) {
+    var name = String(value || "").trim();
+    var match = name.match(/^\${([^}]+)}$/);
+    return match ? match[1] : name;
+  }
+
+  function evaluateConnectionOptions(value, valueType, node) {
+    valueType = valueType || "json";
+    if (valueType === "env") {
+      var envName = normalizeEnvName(value);
+      if (!envName) {
+        var missingNameError = new Error("Environment variable name is required");
+        missingNameError.statusCode = 400;
+        throw missingNameError;
+      }
+      var envValue =
+        typeof RED.util.getSetting === "function"
+          ? RED.util.getSetting(node, envName)
+          : process.env[envName];
+      if (envValue === undefined) {
+        var envError = new Error("Environment variable " + envName + " is not set");
+        envError.statusCode = 400;
+        throw envError;
+      }
+      value = envValue;
+    }
+    if (typeof value === "string") {
+      try {
+        return JSON.parse(value);
+      } catch (e) {
+        if (valueType === "env") {
+          return value;
+        }
+        e.statusCode = 400;
+        e.message = "Invalid Redis connection JSON: " + e.message;
+        throw e;
+      }
+    }
+    return value;
+  }
+
+  async function testRedisConnection(options, cluster) {
+    var log = [];
+    var started = Date.now();
+    var client;
+    var removeVerboseLogs = function () {};
+    var quitCompleted = false;
+    try {
+      addVerboseLog(log, "creating temporary Redis client", {
+        cluster: !!cluster,
+        options: redactValue(options),
+      });
+      client = buildTestRedisClient(options, cluster);
+      removeVerboseLogs = attachVerboseRedisLogs(client, log);
+      if (client.status !== "ready") {
+        addVerboseLog(log, "connecting");
+        await withTimeout(client.connect(), "Redis connection");
+      }
+      addVerboseLog(log, "sending PING");
+      var response = await withTimeout(client.ping(), "Redis PING");
+      addVerboseLog(log, "received PING response", response);
+      if (response !== "PONG") {
+        throw new Error("Expected PONG from Redis PING, got " + response);
+      }
+      addVerboseLog(log, "disconnecting with QUIT");
+      await gracefulQuit(client);
+      quitCompleted = true;
+      addVerboseLog(log, "graceful disconnect complete");
+      return {
+        success: true,
+        response: response,
+        message: "Connection test passed: PING -> " + response,
+        durationMs: Date.now() - started,
+        log: log,
+      };
+    } catch (err) {
+      addVerboseLog(log, "connection test failed", serializeError(err));
+      err.connectionTestLog = log;
+      err.connectionTestOptions = redactValue(options);
+      throw err;
+    } finally {
+      if (client && !quitCompleted) {
+        try {
+          addVerboseLog(log, "disconnecting after failed test");
+          await gracefulQuit(client);
+          addVerboseLog(log, "disconnect after failed test complete");
+        } catch (e) {
+          addVerboseLog(log, "disconnect after failed test failed", serializeError(e));
+          try {
+            client.disconnect();
+          } catch (_) {}
+        }
+      }
+      removeVerboseLogs();
+    }
+  }
+
+  function logConnectionTestError(node, payload) {
+    var text = [
+      "redis-config test connection failed",
+      "message: " + payload.message,
+      "options: " + safeStringify(payload.options),
+      "log: " + safeStringify(payload.log),
+      "error: " + safeStringify(payload.error),
+    ].join("\n");
+    if (node && typeof node.error === "function") {
+      node.error(text, {
+        topic: "redis-config test connection",
+        payload: payload,
       });
     }
   }
-  RED.nodes.registerType("redis-config", RedisConfig);
+
+  // Secret extract/merge for redis-config. MUST stay in sync with the copy in
+  // redis.html (editor): same paths — single/sentinel `password`, sentinel
+  // `sentinelPassword`, cluster per-node `nodes[i]`.
+  function extractSecrets(options) {
+    var secrets = {};
+    if (Array.isArray(options)) {
+      var pws = options.map(function (node) {
+        return node && node.password ? node.password : "";
+      });
+      if (
+        pws.some(function (p) {
+          return p;
+        })
+      ) {
+        secrets.nodes = pws;
+      }
+      var strippedNodes = options.map(function (node) {
+        var copy = Object.assign({}, node);
+        delete copy.password;
+        return copy;
+      });
+      return { stripped: strippedNodes, secrets: secrets };
+    }
+    if (options && typeof options === "object") {
+      var stripped = Object.assign({}, options);
+      if (Array.isArray(options.sentinels)) {
+        if (options.password) {
+          secrets.password = options.password;
+        }
+        if (options.sentinelPassword) {
+          secrets.sentinelPassword = options.sentinelPassword;
+        }
+        delete stripped.password;
+        delete stripped.sentinelPassword;
+      } else {
+        if (options.password) {
+          secrets.password = options.password;
+        }
+        delete stripped.password;
+      }
+      return { stripped: stripped, secrets: secrets };
+    }
+    return { stripped: options, secrets: secrets };
+  }
+
+  function mergeSecrets(options, secrets) {
+    if (!secrets || typeof secrets !== "object") {
+      return options;
+    }
+    if (Array.isArray(options)) {
+      if (Array.isArray(secrets.nodes)) {
+        secrets.nodes.forEach(function (pw, i) {
+          if (pw && options[i]) {
+            options[i].password = pw;
+          }
+        });
+      }
+      return options;
+    }
+    if (options && typeof options === "object") {
+      if (Array.isArray(options.sentinels)) {
+        if (secrets.password) {
+          options.password = secrets.password;
+        }
+        if (secrets.sentinelPassword) {
+          options.sentinelPassword = secrets.sentinelPassword;
+        }
+      } else if (secrets.password) {
+        options.password = secrets.password;
+      }
+    }
+    return options;
+  }
+
+  function parseSecrets(value) {
+    if (!value) {
+      return {};
+    }
+    try {
+      return JSON.parse(value) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function RedisConfig(n) {
+    RED.nodes.createNode(this, n);
+    this.name = n.name;
+    this.cluster = isClusterConnection(undefined, n.cluster);
+    this.optionsType = n.optionsType || "json";
+    try {
+      this.options = evaluateConnectionOptions(n.options, this.optionsType, this);
+      if (this.optionsType !== "env") {
+        this.options = mergeSecrets(
+          this.options,
+          parseSecrets(this.credentials && this.credentials.secrets)
+        );
+      }
+      this.cluster = isClusterConnection(this.options, this.cluster);
+    } catch (err) {
+      this.options = undefined;
+      this.error(err.message, null);
+    }
+  }
+  RED.nodes.registerType("redis-config", RedisConfig, {
+    credentials: {
+      secrets: { type: "text" },
+    },
+  });
+
+  RED.httpAdmin.post(
+    "/redis-config/test",
+    RED.auth.needsPermission("redis-config.write"),
+    async function (req, res) {
+      var body = req.body || {};
+      var node = body.id ? RED.nodes.getNode(body.id) : null;
+      try {
+        var options = evaluateConnectionOptions(body.options, body.optionsType, node);
+        var result = await testRedisConnection(options, isClusterConnection(options, body.cluster));
+        res.json(result);
+      } catch (err) {
+        var statusCode = err.statusCode || 500;
+        var payload = {
+          success: false,
+          message: "Connection test failed: " + (err.message || String(err)),
+          error: serializeError(err),
+          options: err.connectionTestOptions || redactValue(body.options),
+          log: err.connectionTestLog || [],
+        };
+        if (statusCode >= 500) {
+          logConnectionTestError(node, payload);
+        }
+        res.status(statusCode).json(payload);
+      }
+    }
+  );
 
   function RedisIn(n) {
     RED.nodes.createNode(this, n);
@@ -45,11 +537,20 @@ function RedisConfig(n) {
     let client = getConn(this.server, n.id);
     let running = true;
 
+    let removeListeners = attachStatusListeners(node, client);
+
     node.on("close", async (undeploy, done) => {
+      removeListeners();
       node.status({});
-      disconnect(node.id);
-      client = null;
       running = false;
+      if (node._blockingRetryCancel) {
+        node._blockingRetryCancel();
+      }
+      // Blocking commands (BLPOP/XREADGROUP BLOCK 0) queue QUIT behind themselves
+      // and never release the socket — skip QUIT and disconnect immediately so the
+      // in-flight command errors, the while loop sees !running and exits cleanly.
+      await disconnect(node.id, true);
+      client = null;
       done();
     });
 
@@ -57,9 +558,9 @@ function RedisConfig(n) {
       client.on("pmessage", function (pattern, channel, message) {
         var payload = null;
         try {
-          if(node.obj){
+          if (node.obj) {
             payload = JSON.parse(message);
-          }else{
+          } else {
             payload = message;
           }
         } catch (err) {
@@ -72,20 +573,14 @@ function RedisConfig(n) {
           });
         }
       });
-      client[node.command](node.topic, (err, count) => {
-        node.status({
-          fill: "green",
-          shape: "dot",
-          text: "connected",
-        });
-      });
+      client[node.command](node.topic, (err, count) => {});
     } else if (node.command === "subscribe") {
       client.on("message", function (channel, message) {
         var payload = null;
         try {
-          if(node.obj){
+          if (node.obj) {
             payload = JSON.parse(message);
-          }else{
+          } else {
             payload = message;
           }
         } catch (err) {
@@ -97,102 +592,111 @@ function RedisConfig(n) {
           });
         }
       });
-      client[node.command](node.topic, (err, count) => {
-        node.status({
-          fill: "green",
-          shape: "dot",
-          text: "connected",
-        });
-      });
-    } else if (node.command === 'xreadgroup') {
-        const [stream, lastid] = node.topic.split(':');
-        async.whilst(
-            function test(cb) { cb(null, running); },
-            function iter(cb) {
-                client.xreadgroup('GROUP', node.groupname, node.consumername, 'BLOCK', 0, 'STREAMS', stream, lastid)
-                .then(function (data) {
-                    if (data) {
-                        data.forEach(function (streamResult) {
-                            const streamName = streamResult[0];
-                            const messages = streamResult[1];
-                            messages.forEach(function (message) {
-                                const messageId = message[0];
-                                const keyValues = message[1];
-                                let payload;
-                                if (node.obj) {
-                                    payload = {};
-                                    for (let i = 0; i < keyValues.length; i += 2) {
-                                        payload[keyValues[i]] = keyValues[i + 1];
-                                    }
-                                } else {
-                                    payload = keyValues;
-                                }
-
-                                node.send({
-                                    stream: streamName,
-                                    messageId: messageId,
-                                    payload: payload
-                                });
-                            });
-                        });
+      client[node.command](node.topic, (err, count) => {});
+    } else if (node.command === "xreadgroup") {
+      const [stream, lastid] = node.topic.split(":");
+      (async () => {
+        let attempt = 0;
+        while (running) {
+          try {
+            const data = await client.xreadgroup(
+              "GROUP",
+              node.groupname,
+              node.consumername,
+              "BLOCK",
+              0,
+              "STREAMS",
+              stream,
+              lastid
+            );
+            attempt = 0;
+            if (data) {
+              data.forEach(function (streamResult) {
+                const streamName = streamResult[0];
+                const messages = streamResult[1];
+                messages.forEach(function (message) {
+                  const messageId = message[0];
+                  const keyValues = message[1];
+                  let payload;
+                  if (node.obj) {
+                    payload = {};
+                    for (let i = 0; i < keyValues.length; i += 2) {
+                      payload[keyValues[i]] = keyValues[i + 1];
                     }
-                    if (running) {
-                        process.nextTick(function() {
-                            cb(null);
-                        });
-                    }
-                })
-                .catch(function (err) {
-                    if (running) {
-                        node.error(err, { topic: node.topic });
-                        running = false;
-                    }
-                    cb(err);
-                });
-            }
-        );
-    }
-
-    else {
-      async.whilst(
-        (cb) => {
-          cb(null, running);
-        },
-        (cb) => {
-          client[node.command](node.topic, Number(node.timeout))
-            .then((data) => {
-              if (data !== null && data.length == 2) {
-                var payload = null;
-                try {
-                  if(node.obj){
-                    payload = JSON.parse(data[1]);
-                  }else{
-                    payload = data[1];
+                  } else {
+                    payload = keyValues;
                   }
-                } catch (err) {
-                  payload = data[1];
-                } finally {
                   node.send({
-                    topic: node.topic,
+                    stream: streamName,
+                    messageId: messageId,
                     payload: payload,
                   });
+                });
+              });
+            }
+          } catch (err) {
+            if (!running) return;
+            attempt += 1;
+            if (err.message && err.message.startsWith("NOGROUP")) {
+              node.warn(
+                'Consumer group "' +
+                  node.groupname +
+                  '" not found on stream "' +
+                  stream +
+                  '". Retrying — run the setup step (XGROUP CREATE) to create it.'
+              );
+            } else {
+              node.warn("redis-in xreadgroup error, retrying: " + err.message);
+            }
+            node.status({ fill: "yellow", shape: "ring", text: "retrying" });
+            await blockingSleep(blockingBackoffDelay(attempt), node);
+          }
+        }
+      })();
+    } else {
+      (async () => {
+        let attempt = 0;
+        while (running) {
+          try {
+            const data = await client[node.command](node.topic, Number(node.timeout));
+            attempt = 0;
+            if (data !== null && data.length >= 2) {
+              var payload = null;
+              var topic = data[0] || node.topic;
+              try {
+                if (node.command === "bzpopmin" || node.command === "bzpopmax") {
+                  // data: [key, member, score]
+                  let member = data[1];
+                  if (node.obj) {
+                    try {
+                      member = JSON.parse(data[1]);
+                    } catch (e) {}
+                  }
+                  payload = { member: member, score: parseFloat(data[2]) };
+                } else if (node.obj) {
+                  payload = JSON.parse(data[1]);
+                } else {
+                  payload = data[1];
                 }
+              } catch (err) {
+                payload = data[1];
+              } finally {
+                node.send({
+                  topic: topic,
+                  payload: payload,
+                });
               }
-              cb(null);
-            })
-            .catch((e) => {
-              RED.log.info(e.message);
-              running = false;
-            });
-        },
-        () => {}
-      );
+            }
+          } catch (e) {
+            if (!running) break;
+            attempt += 1;
+            node.warn("redis-in " + node.command + " error, retrying: " + e.message);
+            node.status({ fill: "yellow", shape: "ring", text: "retrying" });
+            await blockingSleep(blockingBackoffDelay(attempt), node);
+          }
+        }
+      })();
     }
-    node.status({
-      fill: "green",
-      shape: "dot",
-      text: "connected",
-    });
   }
 
   RED.nodes.registerType("redis-in", RedisIn);
@@ -205,20 +709,30 @@ function RedisConfig(n) {
     this.topic = n.topic;
     this.obj = n.obj;
     var node = this;
- 
-    let client = getConn(this.server, node.server.name);
 
-    node.on("close", function (done) {
+    let client = getConn(this.server, node.server.name);
+    let removeListeners = attachStatusListeners(node, client);
+
+    node.on("close", async function (done) {
+      removeListeners();
       node.status({});
-      disconnect( node.server.name);
+      await disconnect(node.server.name);
       client = null;
       done();
     });
 
-    node.on("input", function (msg, send, done) {
+    node.on("input", async function (msg, send, done) {
       var topic;
-      send = send || function() { node.send.apply(node,arguments) }
-      done = done || function(err) { if(err)node.error(err, msg); }
+      send =
+        send ||
+        function () {
+          node.send.apply(node, arguments);
+        };
+      done =
+        done ||
+        function (err) {
+          if (err) node.error(err, msg);
+        };
       if (msg.topic !== undefined && msg.topic !== "") {
         topic = msg.topic;
       } else {
@@ -228,10 +742,32 @@ function RedisConfig(n) {
         done(new Error("Missing topic, please send topic on msg or set Topic on node."));
       } else {
         try {
-          if(node.obj){
-            client[node.command](topic, JSON.stringify(msg.payload));
-          }else{
-            client[node.command](topic, msg.payload);
+          if (node.command === "xadd") {
+            let fields;
+            const p = msg.payload;
+            if (p && typeof p === "object" && !Array.isArray(p)) {
+              fields = Object.entries(p).reduce((acc, pair) => acc.concat(pair), []);
+            } else if (Array.isArray(p)) {
+              fields = p;
+            } else {
+              fields = ["value", p != null ? String(p) : ""];
+            }
+            await client.xadd(topic, "*", ...fields);
+          } else if (node.command === "zadd") {
+            const p = msg.payload;
+            if (p && typeof p === "object" && !Array.isArray(p) && "score" in p) {
+              const member = node.obj ? JSON.stringify(p.member) : String(p.member);
+              await client.zadd(topic, p.score, member);
+            } else if (Array.isArray(p)) {
+              await client.zadd(topic, ...p);
+            } else {
+              done(new Error("zadd requires payload {score, member} or [score, member, ...]"));
+              return;
+            }
+          } else if (node.obj) {
+            await client[node.command](topic, JSON.stringify(msg.payload));
+          } else {
+            await client[node.command](topic, msg.payload);
           }
           done();
         } catch (err) {
@@ -254,18 +790,28 @@ function RedisConfig(n) {
     let id = this.block ? n.id : this.server.name;
 
     let client = getConn(this.server, id);
+    let removeListeners = attachStatusListeners(node, client);
 
-    node.on("close", function (done) {
+    node.on("close", async function (done) {
+      removeListeners();
       node.status({});
-      disconnect(id);
+      await disconnect(id);
       client = null;
       done();
     });
 
     node.on("input", function (msg, send, done) {
       let topic = undefined;
-      send = send || function() { node.send.apply(node,arguments) }
-      done = done || function(err) { if(err)node.error(err, msg); }
+      send =
+        send ||
+        function () {
+          node.send.apply(node, arguments);
+        };
+      done =
+        done ||
+        function (err) {
+          if (err) node.error(err, msg);
+        };
 
       if (msg.topic !== undefined && msg.topic !== "") {
         topic = msg.topic;
@@ -336,6 +882,14 @@ function RedisConfig(n) {
   }
   RED.nodes.registerType("redis-command", RedisCmd);
 
+  // Redis error replies use stable, fixed-case prefixes ("NOSCRIPT ...",
+  // "ERR Function not found ..."). Anchor on the prefix so a user script or
+  // function whose own error merely CONTAINS the phrase never triggers
+  // recovery (which would re-execute a possibly non-idempotent call).
+  function redisErrorStartsWith(err, prefix) {
+    return !!(err && typeof err.message === "string" && err.message.startsWith(prefix));
+  }
+
   function RedisLua(n) {
     RED.nodes.createNode(this, n);
     this.server = RED.nodes.getNode(n.server);
@@ -343,62 +897,179 @@ function RedisConfig(n) {
     this.name = n.name;
     this.keyval = n.keyval;
     this.stored = n.stored;
+    this.mode = n.mode || "script";
+    // Strict boolean: hand-edited flow JSON may carry the string "false",
+    // which must not silently enable the read-only command variants.
+    this.readonly = n.readonly === true || n.readonly === "true";
+    this.fname = typeof n.fname === "string" ? n.fname.trim() : "";
+    // Validated once: function mode needs a library source and a function name.
+    this.hasLibSource = !!(n.func && String(n.func).trim());
     this.sha1 = "";
+    this.libname = "";
     this.command = "eval";
     var node = this;
     this.block = n.block || false;
-    let id = this.block ? n.id : n.server.name;
+    let id = this.block ? n.id : this.server.name;
 
     let client = getConn(this.server, id);
 
-    node.on("close", function (done) {
+    // FUNCTION LOAD/SCRIPT LOAD are node-local. In cluster mode the load must
+    // reach every master so an FCALL/EVALSHA routed to any shard can resolve;
+    // standalone/sentinel has a single target. Loads run in parallel.
+    // All-or-nothing on purpose: a partial cluster load is reported (and
+    // logged) as a failure rather than silently serving only some shards.
+    const loadLibraryOn = async function () {
+      const targets = typeof client.nodes === "function" ? client.nodes("master") : [client];
+      if (targets.length === 0) {
+        throw new Error("no Redis master available");
+      }
+      const names = await Promise.all(targets.map((c) => c.function("load", "replace", node.func)));
+      return names[0];
+    };
+
+    // Coalesces concurrent reloads (recovery path): N in-flight messages that
+    // all hit "function not found" share one FUNCTION LOAD round instead of
+    // issuing one per message.
+    let inflightLoad = null;
+    const reloadLibrary = async function () {
+      if (inflightLoad) {
+        return inflightLoad;
+      }
+      inflightLoad = loadLibraryOn();
+      try {
+        return await inflightLoad;
+      } finally {
+        inflightLoad = null;
+      }
+    };
+
+    // On every "ready" (including reconnects) reload, since Redis is volatile
+    // and a reconnected/replaced server may have lost the script/library.
+    const loadLibrary = async function () {
+      if (!node.hasLibSource) {
+        node.status({ fill: "red", shape: "dot", text: "no library source" });
+        return;
+      }
+      if (!node.fname) {
+        node.status({ fill: "red", shape: "dot", text: "missing function name" });
+        return;
+      }
+      try {
+        node.libname = await loadLibraryOn();
+        node.status({ fill: "green", shape: "dot", text: "library loaded" });
+      } catch (err) {
+        node.status({ fill: "red", shape: "dot", text: "library not loaded" });
+        // Surface the FUNCTION LOAD failure (e.g. a Lua compile error or a
+        // missing #!lua shebang) — the status text alone is not actionable.
+        node.error(err);
+      }
+    };
+
+    const loadScript = async function () {
+      try {
+        node.sha1 = await client.script("load", node.func);
+        node.status({ fill: "green", shape: "dot", text: "script loaded" });
+      } catch (err) {
+        node.status({ fill: "red", shape: "dot", text: "script not loaded" });
+      }
+    };
+
+    let removeListeners;
+    if (node.mode === "function") {
+      removeListeners = attachStatusListeners(node, client, loadLibrary);
+    } else if (node.stored) {
+      removeListeners = attachStatusListeners(node, client, loadScript);
+    } else {
+      removeListeners = attachStatusListeners(node, client);
+    }
+
+    node.on("close", async function (done) {
+      removeListeners();
       node.status({});
-      disconnect(id);
+      await disconnect(id);
       client = null;
       done();
     });
-    if (node.stored) {
-      client.script("load", node.func, function (err, res) {
-        if (err) {
-          node.status({
-            fill: "red",
-            shape: "dot",
-            text: "script not loaded",
-          });
-        } else {
-          node.status({
-            fill: "green",
-            shape: "dot",
-            text: "script loaded",
-          });
-          node.sha1 = res;
-        }
-      });
-    }
 
-    node.on("input", function (msg, send, done) {
-      send = send || function() { node.send.apply(node,arguments) }
-      done = done || function(err) { if(err)node.error(err, msg); }
+    node.on("input", async function (msg, send, done) {
+      send =
+        send ||
+        function () {
+          node.send.apply(node, arguments);
+        };
+      done =
+        done ||
+        function (err) {
+          if (err) node.error(err, msg);
+        };
+
+      // Fail fast on configuration errors — no Redis round-trip, no status
+      // writes here (connection status is owned by the listeners; the on-ready
+      // loader already shows the matching red configuration status).
+      if (node.mode === "function" && !node.hasLibSource) {
+        done(Error("Function mode requires a library source"));
+        return;
+      }
+      if (node.mode === "function" && !node.fname) {
+        done(Error("Function mode requires a function name"));
+        return;
+      }
       if (node.keyval > 0 && !Array.isArray(msg.payload)) {
-        throw Error("Payload is not Array");
+        done(Error("Payload is not Array"));
+        return;
       }
 
-      var args = null;
-      if (node.stored) {
-        node.command = "evalsha";
-        args = [node.sha1, node.keyval].concat(msg.payload);
-      } else {
-        args = [node.func, node.keyval].concat(msg.payload);
-      }
-      client[node.command](args, function (err, res) {
-        if (err) {
-          done(err);
+      // [leadingArg, numkeys, ...keysAndArgs]; ioredis flattens the array.
+      const argsWith = (head) => [head, node.keyval].concat(msg.payload);
+
+      try {
+        let res;
+        if (node.mode === "function") {
+          // FCALL/FCALL_RO invoke a registered function by name. If the library
+          // was FUNCTION FLUSH/DELETE'd out of band, reload once and retry,
+          // mirroring the stored-script NOSCRIPT recovery.
+          const fcallCmd = node.readonly ? "fcall_ro" : "fcall";
+          node.command = fcallCmd;
+          try {
+            res = await client[fcallCmd](argsWith(node.fname));
+          } catch (err) {
+            if (redisErrorStartsWith(err, "ERR Function not found")) {
+              node.libname = await reloadLibrary();
+              node.status({ fill: "green", shape: "dot", text: "library loaded" });
+              res = await client[fcallCmd](argsWith(node.fname));
+            } else {
+              throw err;
+            }
+          }
+        } else if (node.stored) {
+          // Stored scripts prefer EVALSHA(_RO) to avoid resending the body. A
+          // NOSCRIPT means the SHA1 is no longer cached — fall back to the
+          // matching EVAL variant (EVAL_RO stays read-only) which re-caches it.
+          const evalshaCmd = node.readonly ? "evalsha_ro" : "evalsha";
+          node.command = evalshaCmd;
+          try {
+            res = await client[evalshaCmd](argsWith(node.sha1));
+          } catch (err) {
+            if (redisErrorStartsWith(err, "NOSCRIPT")) {
+              const evalCmd = node.readonly ? "eval_ro" : "eval";
+              node.command = evalCmd;
+              res = await client[evalCmd](argsWith(node.func));
+            } else {
+              throw err;
+            }
+          }
         } else {
-          msg.payload = res;
-          send(msg);
-          done();
+          // Ship the full body with EVAL/EVAL_RO so Redis caches it under its SHA1.
+          const evalCmd = node.readonly ? "eval_ro" : "eval";
+          node.command = evalCmd;
+          res = await client[evalCmd](argsWith(node.func));
         }
-      });
+        msg.payload = res;
+        send(msg);
+        done();
+      } catch (err) {
+        done(err);
+      }
     });
   }
   RED.nodes.registerType("redis-lua-script", RedisLua);
@@ -413,17 +1084,20 @@ function RedisConfig(n) {
     var node = this;
     let client = getConn(this.server, id);
 
-    this.context()[node.location].set(node.topic, client);
-    node.status({
-      fill: "green",
-      shape: "dot",
-      text: "ready",
-    });
+    try {
+      this.context()[node.location].set(node.topic, client);
+    } catch (e) {
+      node.warn("redis-instance: failed to store client in context: " + e.message);
+    }
+    let removeListeners = attachStatusListeners(node, client);
 
-    node.on("close", function (done) {
+    node.on("close", async function (done) {
+      removeListeners();
       node.status({});
-      this.context()[node.location].set(node.topic, null);
-      disconnect(id);
+      try {
+        this.context()[node.location].set(node.topic, null);
+      } catch (e) {}
+      await disconnect(id);
       client = null;
       done();
     });
@@ -445,11 +1119,7 @@ function RedisConfig(n) {
       );
     }
     try {
-      if (config.cluster) {
-        connections[id] = new Redis.Cluster(options);
-      } else {
-        connections[id] = new Redis(options);
-      }
+      connections[id] = buildRedisClient(options, config.cluster);
 
       connections[id].on("error", (e) => {
         config.error(e, null);
@@ -464,13 +1134,59 @@ function RedisConfig(n) {
     }
   }
 
-  function disconnect(id) {
+  // Sends QUIT so in-flight replies drain before the socket closes.
+  // Skipped when the connection is not ready (bad host, reconnecting) to avoid
+  // queuing a command that can never be sent.
+  // Falls back to a forced disconnect after GRACEFUL_QUIT_TIMEOUT_MS in case
+  // QUIT itself stalls (e.g. server unresponsive).
+  async function gracefulQuit(client) {
+    if (client.status !== "ready") {
+      try {
+        client.disconnect();
+      } catch (e) {}
+      return;
+    }
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        client.disconnect();
+      } catch (e) {}
+    }, GRACEFUL_QUIT_TIMEOUT_MS);
+    try {
+      await client.quit();
+    } catch (e) {
+      if (!timedOut) {
+        try {
+          client.disconnect();
+        } catch (_) {}
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // force=true skips QUIT and disconnects the socket immediately.
+  // Use for blocking connections (BLPOP/XREADGROUP BLOCK 0): QUIT would be
+  // queued behind the in-flight command and never sent, so the timeout would
+  // fire anyway — an immediate disconnect is both faster and correct because
+  // running=false is already set before this is called.
+  function disconnect(id, force) {
     if (usedConn[id] !== undefined) {
       usedConn[id]--;
     }
     if (connections[id] && usedConn[id] <= 0) {
-      connections[id].disconnect();
+      var client = connections[id];
       delete connections[id];
+      delete usedConn[id];
+      if (force) {
+        try {
+          client.disconnect();
+        } catch (e) {}
+        return Promise.resolve();
+      }
+      return gracefulQuit(client);
     }
+    return Promise.resolve();
   }
 };

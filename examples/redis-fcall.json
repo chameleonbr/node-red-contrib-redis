@@ -1,0 +1,67 @@
+[
+    {
+        "id": "fcall-comment",
+        "type": "comment",
+        "z": "fcall-flow",
+        "name": "Redis Functions: FUNCTION LOAD + FCALL",
+        "info": "The redis lua node in Function mode loads the library source (FUNCTION LOAD REPLACE) on deploy, then calls the registered function `getval` with FCALL. Inject sends [key] as KEYS[1]; the debug node shows the returned value. Manage libraries (LIST/FLUSH/DELETE) with the redis-command node.",
+        "x": 230,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "fcall-inject",
+        "type": "inject",
+        "z": "fcall-flow",
+        "name": "key: demo:fcall",
+        "props": [
+            { "p": "payload" }
+        ],
+        "repeat": "",
+        "once": false,
+        "topic": "",
+        "payload": "[\"demo:fcall\"]",
+        "payloadType": "json",
+        "x": 180,
+        "y": 160,
+        "wires": [["fcall-node"]]
+    },
+    {
+        "id": "fcall-node",
+        "type": "redis-lua-script",
+        "z": "fcall-flow",
+        "server": "fcall-config",
+        "name": "FCALL getval",
+        "mode": "function",
+        "readonly": false,
+        "keyval": 1,
+        "func": "#!lua name=demolib\nredis.register_function('getval', function(keys, args) return redis.call('GET', keys[1]) end)",
+        "fname": "getval",
+        "stored": false,
+        "block": false,
+        "x": 430,
+        "y": 160,
+        "wires": [["fcall-debug"]]
+    },
+    {
+        "id": "fcall-debug",
+        "type": "debug",
+        "z": "fcall-flow",
+        "name": "result",
+        "active": true,
+        "tosidebar": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 650,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "fcall-config",
+        "type": "redis-config",
+        "name": "localhost",
+        "options": "{\"host\":\"127.0.0.1\",\"port\":6379}",
+        "optionsType": "json",
+        "cluster": false
+    }
+]

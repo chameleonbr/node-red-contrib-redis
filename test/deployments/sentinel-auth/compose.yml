@@ -1,0 +1,110 @@
+services:
+  redis-master:
+    image: ${REDIS_TOPOLOGY_IMAGE:-redis:7.2-alpine}
+    network_mode: host
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./redis-master.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis-master-data:/data
+
+  redis-replica-6380:
+    image: ${REDIS_TOPOLOGY_IMAGE:-redis:7.2-alpine}
+    network_mode: host
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./redis-replica-6380.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis-replica-6380-data:/data
+
+  redis-replica-6381:
+    image: ${REDIS_TOPOLOGY_IMAGE:-redis:7.2-alpine}
+    network_mode: host
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./redis-replica-6381.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis-replica-6381-data:/data
+
+  sentinel-26379:
+    image: ${REDIS_TOPOLOGY_IMAGE:-redis:7.2-alpine}
+    network_mode: host
+    depends_on:
+      - redis-master
+      - redis-replica-6380
+      - redis-replica-6381
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        cat > /tmp/sentinel.conf <<'EOF'
+        port 26379
+        bind 127.0.0.1
+        protected-mode no
+        dir /tmp
+        sentinel monitor mymaster 127.0.0.1 6379 2
+        sentinel auth-user mymaster node_red
+        sentinel auth-pass mymaster node-red-pass
+        sentinel down-after-milliseconds mymaster 1000
+        sentinel failover-timeout mymaster 10000
+        sentinel parallel-syncs mymaster 1
+        EOF
+        exec redis-sentinel /tmp/sentinel.conf
+
+  sentinel-26380:
+    image: ${REDIS_TOPOLOGY_IMAGE:-redis:7.2-alpine}
+    network_mode: host
+    depends_on:
+      - redis-master
+      - redis-replica-6380
+      - redis-replica-6381
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        cat > /tmp/sentinel.conf <<'EOF'
+        port 26380
+        bind 127.0.0.1
+        protected-mode no
+        dir /tmp
+        sentinel monitor mymaster 127.0.0.1 6379 2
+        sentinel auth-user mymaster node_red
+        sentinel auth-pass mymaster node-red-pass
+        sentinel down-after-milliseconds mymaster 1000
+        sentinel failover-timeout mymaster 10000
+        sentinel parallel-syncs mymaster 1
+        EOF
+        exec redis-sentinel /tmp/sentinel.conf
+
+  sentinel-26381:
+    image: ${REDIS_TOPOLOGY_IMAGE:-redis:7.2-alpine}
+    network_mode: host
+    depends_on:
+      - redis-master
+      - redis-replica-6380
+      - redis-replica-6381
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        cat > /tmp/sentinel.conf <<'EOF'
+        port 26381
+        bind 127.0.0.1
+        protected-mode no
+        dir /tmp
+        sentinel monitor mymaster 127.0.0.1 6379 2
+        sentinel auth-user mymaster node_red
+        sentinel auth-pass mymaster node-red-pass
+        sentinel down-after-milliseconds mymaster 1000
+        sentinel failover-timeout mymaster 10000
+        sentinel parallel-syncs mymaster 1
+        EOF
+        exec redis-sentinel /tmp/sentinel.conf
+
+volumes:
+  redis-master-data:
+  redis-replica-6380-data:
+  redis-replica-6381-data:

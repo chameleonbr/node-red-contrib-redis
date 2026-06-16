@@ -1,0 +1,146 @@
+[
+    {
+        "id": "cc10bc9deadcb001",
+        "type": "comment",
+        "z": "cc00de2a9d051600",
+        "name": "Setup runs automatically on deploy (once: true). It creates consumer group 'workers' on stream 'taskstream'. You can also trigger it manually with the '1. Setup' button.",
+        "info": "",
+        "x": 160,
+        "y": 160,
+        "w": 300,
+        "wires": []
+    },
+    {
+        "id": "cc10bc9deadcb002",
+        "type": "inject",
+        "z": "cc00de2a9d051600",
+        "name": "1. Setup — run once",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.5,
+        "topic": "",
+        "payload": "",
+        "payloadType": "str",
+        "x": 200,
+        "y": 220,
+        "wires": [
+            [
+                "cc10bc9deadcb003"
+            ]
+        ]
+    },
+    {
+        "id": "cc10bc9deadcb003",
+        "type": "redis-command",
+        "z": "cc00de2a9d051600",
+        "server": "cc00055b7cab2800",
+        "command": "XGROUP",
+        "name": "XGROUP CREATE",
+        "topic": "",
+        "params": "[\"CREATE\",\"taskstream\",\"workers\",\"0\",\"MKSTREAM\"]",
+        "paramsType": "json",
+        "block": false,
+        "x": 430,
+        "y": 220,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "cc10bc9deadcb004",
+        "type": "inject",
+        "z": "cc00de2a9d051600",
+        "name": "2. Send message",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{\"message\": \"hello stream\", \"source\": \"node-red\"}",
+        "payloadType": "json",
+        "x": 200,
+        "y": 300,
+        "wires": [
+            [
+                "cc10bc9deadcb005"
+            ]
+        ]
+    },
+    {
+        "id": "cc10bc9deadcb005",
+        "type": "redis-out",
+        "z": "cc00de2a9d051600",
+        "server": "cc00055b7cab2800",
+        "command": "xadd",
+        "name": "Produce to stream",
+        "topic": "taskstream",
+        "obj": true,
+        "x": 430,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "cc10bc9deadcb006",
+        "type": "redis-in",
+        "z": "cc00de2a9d051600",
+        "server": "cc00055b7cab2800",
+        "command": "xreadgroup",
+        "name": "Consume from stream",
+        "topic": "taskstream:>",
+        "obj": true,
+        "timeout": 0,
+        "groupname": "workers",
+        "consumername": "consumer-1",
+        "x": 220,
+        "y": 440,
+        "wires": [
+            [
+                "cc10bc9deadcb007"
+            ]
+        ]
+    },
+    {
+        "id": "cc10bc9deadcb007",
+        "type": "debug",
+        "z": "cc00de2a9d051600",
+        "name": "Print stream message",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 450,
+        "y": 440,
+        "wires": []
+    },
+    {
+        "id": "cc00055b7cab2800",
+        "type": "redis-config",
+        "name": "Local",
+        "options": "{}",
+        "cluster": false,
+        "optionsType": "json"
+    },
+    {
+        "id": "cc00abb97799ed00",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-redis": "2.0.0"
+        }
+    }
+]

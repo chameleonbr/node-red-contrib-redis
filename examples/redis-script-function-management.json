@@ -1,0 +1,225 @@
+[
+    {
+        "id": "mgmt-comment",
+        "type": "comment",
+        "z": "mgmt-flow",
+        "name": "Managing Redis Functions and the script cache",
+        "info": "FUNCTION and SCRIPT management/admin subcommands run through the redis-command node: pick FUNCTION or SCRIPT as the command and put the subcommand plus its arguments in msg.payload as a JSON array.\n\nTop row — Redis Functions: FUNCTION LOAD REPLACE registers a library, FUNCTION LIST shows registered libraries, FUNCTION STATS shows engine stats, FUNCTION DELETE removes the demo library. FUNCTION FLUSH (remove ALL libraries), DUMP and RESTORE follow the same payload pattern but are destructive or binary, so they are not wired here.\n\nBottom row — script cache: SCRIPT LOAD returns the script's SHA1; the function node feeds that SHA1 into SCRIPT EXISTS, which returns [1] while the script is cached. SCRIPT FLUSH empties the whole cache (after it, SCRIPT EXISTS returns [0]). SCRIPT DEBUG and KILL follow the same payload pattern.\n\nThe redis-lua-script node only executes scripts and functions — see its help text.",
+        "x": 250,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "mgmt-fn-load",
+        "type": "inject",
+        "z": "mgmt-flow",
+        "name": "FUNCTION LOAD REPLACE demolib",
+        "props": [
+            { "p": "payload" }
+        ],
+        "repeat": "",
+        "once": false,
+        "topic": "",
+        "payload": "[\"LOAD\",\"REPLACE\",\"#!lua name=demolib\\nredis.register_function('demofn', function(keys, args) return 'Hello, world!' end)\"]",
+        "payloadType": "json",
+        "x": 200,
+        "y": 140,
+        "wires": [["mgmt-fn-cmd"]]
+    },
+    {
+        "id": "mgmt-fn-list",
+        "type": "inject",
+        "z": "mgmt-flow",
+        "name": "FUNCTION LIST",
+        "props": [
+            { "p": "payload" }
+        ],
+        "repeat": "",
+        "once": false,
+        "topic": "",
+        "payload": "[\"LIST\"]",
+        "payloadType": "json",
+        "x": 160,
+        "y": 180,
+        "wires": [["mgmt-fn-cmd"]]
+    },
+    {
+        "id": "mgmt-fn-stats",
+        "type": "inject",
+        "z": "mgmt-flow",
+        "name": "FUNCTION STATS",
+        "props": [
+            { "p": "payload" }
+        ],
+        "repeat": "",
+        "once": false,
+        "topic": "",
+        "payload": "[\"STATS\"]",
+        "payloadType": "json",
+        "x": 170,
+        "y": 220,
+        "wires": [["mgmt-fn-cmd"]]
+    },
+    {
+        "id": "mgmt-fn-delete",
+        "type": "inject",
+        "z": "mgmt-flow",
+        "name": "FUNCTION DELETE demolib",
+        "props": [
+            { "p": "payload" }
+        ],
+        "repeat": "",
+        "once": false,
+        "topic": "",
+        "payload": "[\"DELETE\",\"demolib\"]",
+        "payloadType": "json",
+        "x": 190,
+        "y": 260,
+        "wires": [["mgmt-fn-cmd"]]
+    },
+    {
+        "id": "mgmt-fn-cmd",
+        "type": "redis-command",
+        "z": "mgmt-flow",
+        "server": "mgmt-config",
+        "command": "FUNCTION",
+        "name": "FUNCTION (management)",
+        "topic": "",
+        "params": "[]",
+        "paramsType": "json",
+        "payloadType": "json",
+        "block": false,
+        "x": 480,
+        "y": 200,
+        "wires": [["mgmt-fn-debug"]]
+    },
+    {
+        "id": "mgmt-fn-debug",
+        "type": "debug",
+        "z": "mgmt-flow",
+        "name": "functions result",
+        "active": true,
+        "tosidebar": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 700,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "mgmt-script-load",
+        "type": "inject",
+        "z": "mgmt-flow",
+        "name": "SCRIPT LOAD (returns SHA1)",
+        "props": [
+            { "p": "payload" }
+        ],
+        "repeat": "",
+        "once": false,
+        "topic": "",
+        "payload": "[\"LOAD\",\"return 'cached'\"]",
+        "payloadType": "json",
+        "x": 190,
+        "y": 360,
+        "wires": [["mgmt-script-cmd"]]
+    },
+    {
+        "id": "mgmt-script-flush",
+        "type": "inject",
+        "z": "mgmt-flow",
+        "name": "SCRIPT FLUSH (empties the cache)",
+        "props": [
+            { "p": "payload" }
+        ],
+        "repeat": "",
+        "once": false,
+        "topic": "",
+        "payload": "[\"FLUSH\"]",
+        "payloadType": "json",
+        "x": 200,
+        "y": 400,
+        "wires": [["mgmt-script-cmd"]]
+    },
+    {
+        "id": "mgmt-script-cmd",
+        "type": "redis-command",
+        "z": "mgmt-flow",
+        "server": "mgmt-config",
+        "command": "SCRIPT",
+        "name": "SCRIPT (management)",
+        "topic": "",
+        "params": "[]",
+        "paramsType": "json",
+        "payloadType": "json",
+        "block": false,
+        "x": 460,
+        "y": 380,
+        "wires": [["mgmt-script-debug", "mgmt-build-exists"]]
+    },
+    {
+        "id": "mgmt-script-debug",
+        "type": "debug",
+        "z": "mgmt-flow",
+        "name": "script result",
+        "active": true,
+        "tosidebar": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 690,
+        "y": 340,
+        "wires": []
+    },
+    {
+        "id": "mgmt-build-exists",
+        "type": "function",
+        "z": "mgmt-flow",
+        "name": "SHA1 -> SCRIPT EXISTS payload",
+        "func": "// Only chain the SCRIPT LOAD reply (a 40-char SHA1 string) into EXISTS.\nif (typeof msg.payload !== \"string\" || msg.payload.length !== 40) {\n    return null;\n}\nmsg.payload = [\"EXISTS\", msg.payload];\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 710,
+        "y": 420,
+        "wires": [["mgmt-script-exists"]]
+    },
+    {
+        "id": "mgmt-script-exists",
+        "type": "redis-command",
+        "z": "mgmt-flow",
+        "server": "mgmt-config",
+        "command": "SCRIPT",
+        "name": "SCRIPT EXISTS",
+        "topic": "",
+        "params": "[]",
+        "paramsType": "json",
+        "payloadType": "json",
+        "block": false,
+        "x": 920,
+        "y": 420,
+        "wires": [["mgmt-exists-debug"]]
+    },
+    {
+        "id": "mgmt-exists-debug",
+        "type": "debug",
+        "z": "mgmt-flow",
+        "name": "exists? [1]=cached",
+        "active": true,
+        "tosidebar": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 1110,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "mgmt-config",
+        "type": "redis-config",
+        "name": "localhost",
+        "options": "{\"host\":\"127.0.0.1\",\"port\":6379}",
+        "optionsType": "json",
+        "cluster": false
+    }
+]

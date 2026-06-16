@@ -1,0 +1,93 @@
+[
+    {
+        "id": "aa10bc9deadcb001",
+        "type": "redis-in",
+        "z": "aa00de2a9d051600",
+        "server": "aa00055b7cab2800",
+        "command": "blpop",
+        "name": "Consume task",
+        "topic": "tasks:queue",
+        "obj": false,
+        "timeout": 0,
+        "groupname": "",
+        "consumername": "",
+        "x": 220,
+        "y": 300,
+        "wires": [
+            [
+                "aa10bc9deadcb002"
+            ]
+        ]
+    },
+    {
+        "id": "aa10bc9deadcb002",
+        "type": "debug",
+        "z": "aa00de2a9d051600",
+        "name": "Print task",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 430,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "aa10bc9deadcb003",
+        "type": "inject",
+        "z": "aa00de2a9d051600",
+        "name": "Enqueue task",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "do work",
+        "payloadType": "str",
+        "x": 280,
+        "y": 400,
+        "wires": [
+            [
+                "aa10bc9deadcb004"
+            ]
+        ]
+    },
+    {
+        "id": "aa10bc9deadcb004",
+        "type": "redis-out",
+        "z": "aa00de2a9d051600",
+        "server": "aa00055b7cab2800",
+        "command": "rpush",
+        "name": "Produce task",
+        "topic": "tasks:queue",
+        "obj": false,
+        "x": 490,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "aa00055b7cab2800",
+        "type": "redis-config",
+        "name": "Local",
+        "options": "{}",
+        "cluster": false,
+        "optionsType": "json"
+    },
+    {
+        "id": "aa00abb97799ed00",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-redis": "2.0.0"
+        }
+    }
+]

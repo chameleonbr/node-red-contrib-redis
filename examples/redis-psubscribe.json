@@ -1,0 +1,93 @@
+[
+    {
+        "id": "bb10bc9deadcb001",
+        "type": "redis-in",
+        "z": "bb00de2a9d051600",
+        "server": "bb00055b7cab2800",
+        "command": "psubscribe",
+        "name": "Pattern subscribe",
+        "topic": "events:*",
+        "obj": true,
+        "timeout": 0,
+        "groupname": "",
+        "consumername": "",
+        "x": 220,
+        "y": 300,
+        "wires": [
+            [
+                "bb10bc9deadcb002"
+            ]
+        ]
+    },
+    {
+        "id": "bb10bc9deadcb002",
+        "type": "debug",
+        "z": "bb00de2a9d051600",
+        "name": "Print event",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 430,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "bb10bc9deadcb003",
+        "type": "inject",
+        "z": "bb00de2a9d051600",
+        "name": "Publish event",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{\"headline\": \"Node-RED rocks\"}",
+        "payloadType": "json",
+        "x": 280,
+        "y": 400,
+        "wires": [
+            [
+                "bb10bc9deadcb004"
+            ]
+        ]
+    },
+    {
+        "id": "bb10bc9deadcb004",
+        "type": "redis-out",
+        "z": "bb00de2a9d051600",
+        "server": "bb00055b7cab2800",
+        "command": "publish",
+        "name": "Publish",
+        "topic": "events:news",
+        "obj": true,
+        "x": 480,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "bb00055b7cab2800",
+        "type": "redis-config",
+        "name": "Local",
+        "options": "{}",
+        "cluster": false,
+        "optionsType": "json"
+    },
+    {
+        "id": "bb00abb97799ed00",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-redis": "2.0.0"
+        }
+    }
+]

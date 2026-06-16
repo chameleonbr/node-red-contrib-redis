@@ -1,42 +1,209 @@
 # node-red-contrib-redis
-Node Red client for Redis with pub/sub, list, lua scripting, ssl, cluster, custom commands, instance injection and other commands support.
 
-Connection Options parameter receives IORedis object or string (https://github.com/luin/ioredis#connect-to-redis).
+[![npm version](https://img.shields.io/npm/v/node-red-contrib-redis.svg)](https://www.npmjs.com/package/node-red-contrib-redis)
+[![Node-RED](https://img.shields.io/badge/Node--RED-4.x-red)](https://nodered.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Now uses same connection per config name and open new if you set block connection option.
+Redis nodes for Node-RED built on ioredis: standalone connections, Redis Cluster,
+Sentinel, AWS MemoryDB/ElastiCache-style cluster endpoints, blocking inputs, pub/sub,
+streams, command coverage, Lua scripts, and Redis client injection into context.
 
-Roadmap:
-- (ok)Stream Support
-- (ok)Flow or Global redis instance injection to use on function Node.
-- (wip)Better Validations
-- (ok)Custom Commands support(Modules), with instance or Cmd.
+Use this package when a flow needs Redis as an event source, queue, cache, stream,
+coordination point, or custom command target without dropping into a Function node for
+every call.
 
-See the Sample flow before ask how this module works.
+| Cloud-style config                                                                                                                                                                           | Stream consumer groups                                                                                                                                         | Lua scripts &amp; functions                                                                                                                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Redis config editor in Cluster mode with AWS MemoryDB or ElastiCache provider, auth fields, TLS option, and successful Test connection result.](docs/assets/readme/redis-config-cloud.png) | ![Redis in editor configured for XREADGROUP with stream topic, consumer group, consumer name, and JSON parsing.](docs/assets/readme/redis-stream-consumer.png) | ![Redis Lua editor in Function mode: Mode set to Function (FCALL), a registered Function name, Keys 1, the Read-only and Block Commands options, and a Redis Functions library in the editor.](docs/assets/readme/redis-lua-fcall.png) |
 
-Please test and make feedback.
+## Install
 
-I need contributors...
+In the Node-RED editor, open **Menu > Manage palette > Install**, search for
+`node-red-contrib-redis`, and install it.
 
+From the command line, install it in your Node-RED user directory and restart Node-RED:
 
-
-Redis Commands:
-
-![Redis Command](https://github.com/chameleonbr/node-red-examples/raw/master/images/Node-RED_cmd_cfg.png "Redis Command")
-
-Payload -> Redis
-
-![Payload -> Redis](https://github.com/chameleonbr/node-red-examples/raw/master/images/Node-RED_redis_params.png "Payload -> Redis")
-
-Redis Queue:
-
-![Payload -> Redis](https://github.com/chameleonbr/node-red-examples/raw/master/images/Node-RED_in_out.png "Payload -> Redis")
-
-Sample flow: 
-```javascript
-[{"id":"31f1fcb.a6a4a04","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"true","targetType":"full","x":690,"y":240,"wires":[]},{"id":"80d063ee.78deb8","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"","payload":"","payloadType":"date","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":160,"y":240,"wires":[["4cb7b20e.778d34"]]},{"id":"4cb7b20e.778d34","type":"redis-out","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","command":"rpush","name":"","topic":"test","x":450,"y":200,"wires":[]},{"id":"902b8385.2fdd9","type":"redis-in","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","command":"blpop","name":"","topic":"test","timeout":0,"x":450,"y":240,"wires":[["31f1fcb.a6a4a04"]]},{"id":"6373a8a4.82bad","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"","payload":"{\"a\":1,\"b\":2}","payloadType":"json","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":170,"y":200,"wires":[["4cb7b20e.778d34"]]},{"id":"f248c9ea.674658","type":"redis-command","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","command":"getset","name":"","topic":"timestamp","params":"[]","paramsType":"json","payloadType":"json","block":false,"x":430,"y":300,"wires":[["3351713f.42e916"]]},{"id":"424ef610.bbb3a8","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"","payload":"","payloadType":"date","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":160,"y":300,"wires":[["f248c9ea.674658"]]},{"id":"3351713f.42e916","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"false","x":670,"y":300,"wires":[]},{"id":"ba433622.8c6178","type":"catch","z":"f80412b1.e2ee8","name":"","scope":null,"uncaught":false,"x":460,"y":140,"wires":[["ec2978af.3e0458"]]},{"id":"ec2978af.3e0458","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"true","targetType":"full","x":690,"y":140,"wires":[]},{"id":"eccd31de.55e3a","type":"redis-command","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","command":"set","name":"","topic":"","params":"[]","paramsType":"json","payloadType":"json","block":false,"x":380,"y":360,"wires":[["6ac31b1f.b393c4"]]},{"id":"46f5d0c0.8a7198","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"","payload":"[\"key\",\"value\"]","payloadType":"json","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":170,"y":360,"wires":[["eccd31de.55e3a"]]},{"id":"6ac31b1f.b393c4","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"false","x":670,"y":360,"wires":[]},{"id":"9f960d71.749988","type":"redis-command","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","command":"getset","name":"","topic":"","params":"[]","paramsType":"json","payloadType":"json","block":false,"x":390,"y":420,"wires":[["7cef7ea5.dba3b"]]},{"id":"f16ad786.8b294","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"key","payload":"[\"value\"]","payloadType":"json","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":170,"y":420,"wires":[["9f960d71.749988"]]},{"id":"7cef7ea5.dba3b","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"false","x":670,"y":420,"wires":[]},{"id":"7e45a50c.240f7c","type":"redis-command","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","command":"hmset","name":"","topic":"","params":"[]","paramsType":"json","payloadType":"json","block":false,"x":390,"y":540,"wires":[["122ff416.a56b8c"]]},{"id":"488a7f5b.a40628","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"myHash","payload":"{\"a\":1,\"b\":2}","payloadType":"json","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":190,"y":540,"wires":[["7e45a50c.240f7c"]]},{"id":"122ff416.a56b8c","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"false","x":670,"y":540,"wires":[]},{"id":"aff97bc7.84a578","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"","payload":"false","payloadType":"bool","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":150,"y":600,"wires":[["1676f695.aa7189"]]},{"id":"2f4295b5.f78d42","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"false","x":670,"y":600,"wires":[]},{"id":"1676f695.aa7189","type":"redis-command","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","command":"hgetall","name":"","topic":"myHash","params":"{}","paramsType":"json","payloadType":"json","block":false,"x":420,"y":600,"wires":[["2f4295b5.f78d42"]]},{"id":"66098945.141118","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"","payload":"false","payloadType":"bool","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":150,"y":660,"wires":[["e42d2b3b.6bb"]]},{"id":"e23fbe8.d7505c","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"false","x":670,"y":660,"wires":[]},{"id":"e42d2b3b.6bb","type":"redis-command","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","command":"sadd","name":"","topic":"mySet","params":"[\"memberA\",\"memberB\",\"memberC\"]","paramsType":"json","payloadType":"json","block":false,"x":410,"y":660,"wires":[["e23fbe8.d7505c"]]},{"id":"2163c482.b8a244","type":"redis-command","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","command":"get","name":"","topic":"","params":"[]","paramsType":"json","payloadType":"json","block":false,"x":380,"y":480,"wires":[["d2ea99d4.a4c51"]]},{"id":"b5f040ea.800be8","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"key","payload":"[]","payloadType":"json","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":150,"y":480,"wires":[["2163c482.b8a244"]]},{"id":"d2ea99d4.a4c51","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"true","targetType":"full","x":690,"y":480,"wires":[]},{"id":"15f62858.26419","type":"redis-lua-script","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","name":"test","keyval":0,"func":"local text = \"Hello World\"\nreturn text","stored":true,"block":false,"x":370,"y":780,"wires":[["4a40fc2d.b70e2c"]]},{"id":"4f1fc69d.539ee","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"","payload":"","payloadType":"date","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":160,"y":780,"wires":[["15f62858.26419"]]},{"id":"4a40fc2d.b70e2c","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"true","targetType":"full","x":690,"y":780,"wires":[]},{"id":"6ebb1fdf.2fce","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"","payload":"false","payloadType":"bool","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":150,"y":720,"wires":[["5a3d77f4.920fd8"]]},{"id":"bac6944e.4e07","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"false","x":670,"y":720,"wires":[]},{"id":"5a3d77f4.920fd8","type":"redis-command","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","command":"sismember","name":"","topic":"mySet","params":"[\"memberA\"]","paramsType":"json","payloadType":"json","block":false,"x":430,"y":720,"wires":[["bac6944e.4e07"]]},{"id":"c1c3a5a6.c289f","type":"redis-lua-script","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","name":"test2","keyval":0,"func":"local text = \"Hello2222 World2222\"\nreturn text","stored":false,"block":false,"x":370,"y":840,"wires":[["d8bd4107.683c08"]]},{"id":"9013d649.88c35","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"","payload":"","payloadType":"date","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":160,"y":840,"wires":[["c1c3a5a6.c289f"]]},{"id":"d8bd4107.683c08","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"true","targetType":"full","x":690,"y":840,"wires":[]},{"id":"cb44db96.c64bb8","type":"redis-in","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","command":"psubscribe","name":"","topic":"TOPIC:*","timeout":0,"x":460,"y":20,"wires":[["78033f6c.31797"]]},{"id":"78033f6c.31797","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"true","targetType":"full","x":690,"y":20,"wires":[]},{"id":"dac5fcff.4c4cb","type":"redis-in","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","command":"subscribe","name":"","topic":"TOPIC:OK","timeout":0,"x":460,"y":80,"wires":[["6f01eb54.501e7c"]]},{"id":"6f01eb54.501e7c","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"true","targetType":"full","x":690,"y":80,"wires":[]},{"id":"e0d2924b.210708","type":"redis-out","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","command":"publish","name":"","topic":"TOPIC:OK","x":190,"y":140,"wires":[]},{"id":"d1fc59dc.bd4958","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"","payload":"{\"a\":1,\"b\":2}","payloadType":"json","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":170,"y":40,"wires":[["e0d2924b.210708"]]},{"id":"3e05b777.781bd8","type":"redis-command","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","command":"del","name":"","topic":"","params":"[]","paramsType":"json","payloadType":"json","block":false,"x":380,"y":900,"wires":[["fd036d2b.dc6d38"]]},{"id":"6924006.91553","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"key","payload":"[]","payloadType":"json","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":150,"y":900,"wires":[["3e05b777.781bd8"]]},{"id":"fd036d2b.dc6d38","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"true","targetType":"full","x":690,"y":900,"wires":[]},{"id":"a13d2797.8a7ff","type":"redis-instance","z":"f80412b1.e2ee8","server":"a0efbb89.5e42d8","name":"","topic":"redis","location":"flow","block":false,"x":130,"y":960,"wires":[]},{"id":"2a93e7ce.341078","type":"inject","z":"f80412b1.e2ee8","name":"","topic":"","payload":"","payloadType":"date","repeat":"","crontab":"","once":false,"onceDelay":0.1,"x":140,"y":1000,"wires":[["d89709ef.fd9368"]]},{"id":"d89709ef.fd9368","type":"function","z":"f80412b1.e2ee8","name":"","func":"let redis = context.flow.get('redis');\n\nredis.info().then((data)=>{\n    msg.payload = data\n    node.send(msg);\n})\n\n/*\nredis.call(\"anycmd\").then((data)=>{\n    msg.payload = data\n    node.send(msg);\n})*/","outputs":1,"noerr":0,"x":370,"y":1000,"wires":[["f2e9c3a0.8f181"]]},{"id":"f2e9c3a0.8f181","type":"debug","z":"f80412b1.e2ee8","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"true","targetType":"full","x":690,"y":1000,"wires":[]},{"id":"a0efbb89.5e42d8","type":"redis-config","z":"","name":"local","options":"{}","cluster":false,"optionsType":"json"}]
+```bash
+cd ~/.node-red
+npm install node-red-contrib-redis
 ```
 
-Interact with Redis Lua script sample flow:
-```javascript
-[{"id":"db136c5d713d3cd0","type":"inject","z":"1a15e2364209aeb3","name":"","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"","payloadType":"date","x":220,"y":200,"wires":[["5f41ce33e1d008a9"]]},{"id":"4948edd4b85e148f","type":"inject","z":"1a15e2364209aeb3","name":"zadd 1","props":[{"p":"payload"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"[\"device:96a4:1a87:04\", 1, \"{\\\"test\\\":1,\\\"hello\\\":\\\"world1\\\", \\\"hexstr\\\": \\\"000102\\\"}\"]","payloadType":"json","x":210,"y":380,"wires":[["f9ccc3e1983f8ec7"]]},{"id":"89734db2e2b504d9","type":"inject","z":"1a15e2364209aeb3","name":"","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"","payloadType":"date","x":220,"y":580,"wires":[["ad21bea98339b79e"]]},{"id":"5f41ce33e1d008a9","type":"redis-lua-script","z":"1a15e2364209aeb3","server":"08ae710220cd5170","name":"redis lua: hello world","keyval":0,"func":"\nreturn \"hello world\"","stored":false,"block":false,"x":600,"y":200,"wires":[["44f2c4e99a1e521d"]]},{"id":"44f2c4e99a1e521d","type":"debug","z":"1a15e2364209aeb3","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"true","targetType":"full","statusVal":"","statusType":"auto","x":870,"y":520,"wires":[]},{"id":"29035e2612073aa9","type":"redis-lua-script","z":"1a15e2364209aeb3","server":"08ae710220cd5170","name":"redis lua: ping pong","keyval":0,"func":"local foo = redis.call('ping')\nreturn foo","stored":false,"block":false,"x":590,"y":260,"wires":[["44f2c4e99a1e521d"]]},{"id":"b9f91d2f3fceb024","type":"redis-lua-script","z":"1a15e2364209aeb3","server":"08ae710220cd5170","name":"redis lua: set","keyval":"1","func":"local foo = redis.call('SET', KEYS[1], ARGV[1])\nreturn foo","stored":false,"block":false,"x":570,"y":320,"wires":[["44f2c4e99a1e521d"]]},{"id":"cfb9a1d9d6235c96","type":"inject","z":"1a15e2364209aeb3","name":"set key value","props":[{"p":"payload"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"[\"key\", \"value\"]","payloadType":"json","x":230,"y":320,"wires":[["b9f91d2f3fceb024"]]},{"id":"f9ccc3e1983f8ec7","type":"redis-lua-script","z":"1a15e2364209aeb3","server":"08ae710220cd5170","name":"redis lua: zadd","keyval":"1","func":"local foo = redis.call('ZADD', KEYS[1], ARGV[1], ARGV[2])\nreturn foo","stored":false,"block":false,"x":580,"y":380,"wires":[["44f2c4e99a1e521d"]]},{"id":"75a5d81a80da3959","type":"inject","z":"1a15e2364209aeb3","name":"zadd 2","props":[{"p":"payload"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"[\"device:96a4:1a87:04\", 2, \"{\\\"test\\\":2,\\\"hello\\\":\\\"world2\\\", \\\"hexstr\\\": \\\"030405\\\"}\"]","payloadType":"json","x":210,"y":420,"wires":[["f9ccc3e1983f8ec7"]]},{"id":"c32955b956a9c79a","type":"redis-lua-script","z":"1a15e2364209aeb3","server":"08ae710220cd5170","name":"redis lua: cjson decode","keyval":"1","func":"local foo = cjson.decode(ARGV[2])\n\nreturn foo.test","stored":false,"block":false,"x":600,"y":520,"wires":[["44f2c4e99a1e521d"]]},{"id":"84bd8bb2222e0517","type":"inject","z":"1a15e2364209aeb3","name":"cjson","props":[{"p":"payload"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"[\"device:96a4:1a87:04\", 3, \"{\\\"test\\\":3,\\\"hello\\\":\\\"world3\\\", \\\"hexstr\\\": \\\"060708\\\"}\"]","payloadType":"json","x":210,"y":520,"wires":[["c32955b956a9c79a"]]},{"id":"8d8b9d844348773c","type":"inject","z":"1a15e2364209aeb3","name":"","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"","payloadType":"date","x":220,"y":260,"wires":[["29035e2612073aa9"]]},{"id":"15959eedb0e32c26","type":"redis-lua-script","z":"1a15e2364209aeb3","server":"08ae710220cd5170","name":"redis lua: substring","keyval":"1","func":"local foo = tonumber(string.sub(KEYS[1], -2, -1))\n\nreturn foo","stored":false,"block":false,"x":590,"y":640,"wires":[["44f2c4e99a1e521d"]]},{"id":"b66f5d8e92e9fbbf","type":"inject","z":"1a15e2364209aeb3","name":"substring","props":[{"p":"payload"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"[\"device:96a4:1a87:04\", 3, \"{\\\"test\\\":3,\\\"hello\\\":\\\"world3\\\", \\\"hexstr\\\": \\\"060708\\\"}\"]","payloadType":"json","x":220,"y":640,"wires":[["15959eedb0e32c26"]]},{"id":"2a7fac1573b38b98","type":"inject","z":"1a15e2364209aeb3","name":"zadd 3","props":[{"p":"payload"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"[\"device:96a4:1a87:04\", 3, \"{\\\"test\\\":3,\\\"hello\\\":\\\"world3\\\", \\\"hexstr\\\": \\\"060708\\\"}\"]","payloadType":"json","x":210,"y":460,"wires":[["f9ccc3e1983f8ec7"]]},{"id":"ad21bea98339b79e","type":"redis-lua-script","z":"1a15e2364209aeb3","server":"08ae710220cd5170","name":"redis lua: cjson encode","keyval":"0","func":"local foo = {}\n\nfoo.field1 = 1\nfoo.field2 = \"hello world\"\nfoo.field3 = {}\nfoo.field3.name = \"paul\"\n\nreturn cjson.encode(foo)","stored":false,"block":false,"x":600,"y":580,"wires":[["41d9477be860b123"]]},{"id":"41d9477be860b123","type":"json","z":"1a15e2364209aeb3","name":"","property":"payload","action":"","pretty":false,"x":790,"y":580,"wires":[["44f2c4e99a1e521d"]]},{"id":"b6378268209d3f41","type":"redis-lua-script","z":"1a15e2364209aeb3","server":"08ae710220cd5170","name":"redis lua: zcount","keyval":"1","func":"local elementCount = redis.call('ZCOUNT', KEYS[1], \"-inf\", \"+inf\")\n\nreturn elementCount","stored":false,"block":false,"x":580,"y":700,"wires":[["44f2c4e99a1e521d"]]},{"id":"1efddadd63d15077","type":"inject","z":"1a15e2364209aeb3","name":"zcount","props":[{"p":"payload"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"[\"device:96a4:1a87:04\", 4, \"{\\\"test\\\":4,\\\"hello\\\":\\\"world4\\\", \\\"hexstr\\\": \\\"090a0b\\\"}\"]","payloadType":"json","x":210,"y":700,"wires":[["b6378268209d3f41"]]},{"id":"e49699a6dde3b6de","type":"redis-lua-script","z":"1a15e2364209aeb3","server":"08ae710220cd5170","name":"redis lua: zrange","keyval":"1","func":"local elementCount = redis.call('ZRANGE', KEYS[1], 0, 3)\n\nreturn elementCount","stored":false,"block":false,"x":580,"y":760,"wires":[["44f2c4e99a1e521d"]]},{"id":"5da7c2d8aea3b596","type":"inject","z":"1a15e2364209aeb3","name":"zrange","props":[{"p":"payload"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"[\"device:96a4:1a87:04\", 4, \"{\\\"test\\\":4,\\\"hello\\\":\\\"world4\\\", \\\"hexstr\\\": \\\"090a0b\\\"}\"]","payloadType":"json","x":210,"y":760,"wires":[["e49699a6dde3b6de"]]},{"id":"e9aa29233106c2c8","type":"inject","z":"1a15e2364209aeb3","name":"concat","props":[{"p":"payload"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"","payload":"[\"device:96a4:1a87:04\", 4, \"{\\\"test\\\":4,\\\"hello\\\":\\\"world4\\\", \\\"hexstr\\\": \\\"090a0b\\\"}\"]","payloadType":"json","x":210,"y":820,"wires":[["f513666fe9a2c2ca"]]},{"id":"f513666fe9a2c2ca","type":"redis-lua-script","z":"1a15e2364209aeb3","server":"08ae710220cd5170","name":"redis lua: complex","keyval":"1","func":"local response = \"\"\nlocal elementCount = redis.call('ZRANGE', KEYS[1], 0, 3)\n\nfor i=1,3,1\ndo\n  response = response .. cjson.decode(elementCount[i]).hexstr\nend\n\nreturn response","stored":false,"block":false,"x":590,"y":820,"wires":[["44f2c4e99a1e521d"]]},{"id":"08ae710220cd5170","type":"redis-config","name":"Local","options":"{}","cluster":false,"optionsType":"json"}]
+## Quickstart
+
+1. Add a **redis-config** node and choose the connection shape:
+   **Single**, **Cluster**, **Sentinel**, or **ConnString** from an environment variable.
+2. Use **Test connection** before deploying. JSON-mode passwords are stored in
+   Node-RED encrypted credentials; environment-variable mode keeps secrets in the
+   environment.
+3. Add one of the runtime nodes:
+   **redis in** for subscriptions, blocking queues, and `XREADGROUP`;
+   **redis out** for writes such as `RPUSH`, `PUBLISH`, `XADD`, and `ZADD`;
+   **redis cmd** for broad Redis and module command coverage;
+   **redis lua** for atomic Lua scripts; or
+   **redis instance** to place an ioredis client in flow/global context.
+4. Import an example flow from [`examples/`](examples/) rather than starting from a blank
+   canvas.
+
+Useful examples:
+
+- [`redis-set-and-get.json`](examples/redis-set-and-get.json) - basic set/get commands.
+- [`redis-list-queue.json`](examples/redis-list-queue.json) - list producer and blocking
+  consumer.
+- [`redis-priority-queue.json`](examples/redis-priority-queue.json) - sorted-set priority
+  queue.
+- [`redis-pub-sub.json`](examples/redis-pub-sub.json) and
+  [`redis-psubscribe.json`](examples/redis-psubscribe.json) - channels and pattern
+  subscriptions.
+- [`redis-streams.json`](examples/redis-streams.json) - `XADD` with an `XREADGROUP`
+  consumer.
+- [`redis-lua-script.json`](examples/redis-lua-script.json) - Lua scripting patterns.
+- [`redis-fcall.json`](examples/redis-fcall.json) - Redis Functions (`FCALL`) pattern.
+- [`redis-script-function-management.json`](examples/redis-script-function-management.json) -
+  `FUNCTION`/`SCRIPT` management (LOAD, LIST, STATS, DELETE, EXISTS, FLUSH) via `redis-command`.
+
+## Nodes
+
+| Node               | Use it for                       | Highlights                                                                                                                                                 |
+| ------------------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `redis-config`     | Shared connection configuration  | Single Redis, Cluster, Sentinel, AWS MemoryDB/ElastiCache-style endpoints, env JSON, encrypted credential storage, and Test connection.                    |
+| `redis-in`         | Redis as an input source         | `BLPOP`, `BRPOP`, `BZPOPMIN`, `BZPOPMAX`, `SUBSCRIBE`, `PSUBSCRIBE`, and `XREADGROUP`; blocking consumers retry with capped backoff until the node closes. |
+| `redis-out`        | Focused writes                   | List pushes, publish, `XADD`, and `ZADD`; writes are awaited and failures go through Node-RED error handling.                                              |
+| `redis-command`    | General Redis commands           | Runs configured commands through ioredis, supports JSON params, message overrides, and a dedicated connection option for blocking work. Home for `FUNCTION`/`SCRIPT` management subcommands. |
+| `redis-lua-script` | Atomic server-side logic         | Script mode (`EVAL`/`EVAL_RO`, stored `SCRIPT LOAD`+`EVALSHA`/`EVALSHA_RO`, `NOSCRIPT` recovery) and Function mode (`FUNCTION LOAD REPLACE` + `FCALL`/`FCALL_RO`); Lua editor, library metadata, dedicated-connection option. |
+| `redis-instance`   | Advanced Function-node workflows | Stores a live ioredis client in flow or global context under a configured key.                                                                             |
+
+## Configuration Notes
+
+### Standalone
+
+Use the Connection tab for the common case, or JSON like:
+
+```json
+{
+  "host": "127.0.0.1",
+  "port": 6379,
+  "db": 0
+}
 ```
+
+Add `username`, `password`, and `tls: {}` when your Redis server requires ACL auth or TLS.
+In JSON mode, saved passwords are moved into Node-RED credentials instead of remaining in
+the exported flow.
+
+### Redis Cluster
+
+Cluster mode accepts a startup-node array. Username and password values on startup nodes
+are also applied to ioredis `redisOptions`, so discovered cluster nodes authenticate too.
+
+```json
+[
+  {
+    "host": "127.0.0.1",
+    "port": 7000,
+    "username": "node_red",
+    "password": "use-an-environment-secret"
+  }
+]
+```
+
+For AWS MemoryDB or ElastiCache cluster configuration endpoints, use the provider in the
+Connection tab or include `dnsLookupStrategy: "identity"` in JSON. That enables identity
+DNS lookup and TLS for the cluster connection.
+
+```json
+[
+  {
+    "host": "clustercfg.example.memorydb.region.amazonaws.com",
+    "port": 6379,
+    "username": "node_red",
+    "password": "use-an-environment-secret",
+    "dnsLookupStrategy": "identity"
+  }
+]
+```
+
+### Sentinel
+
+Sentinel mode uses a master name plus Sentinel endpoints:
+
+```json
+{
+  "name": "mymaster",
+  "sentinels": [
+    {
+      "host": "127.0.0.1",
+      "port": 26379
+    }
+  ],
+  "username": "node_red",
+  "password": "use-an-environment-secret"
+}
+```
+
+If the Sentinel nodes themselves require auth or TLS, use `sentinelUsername`,
+`sentinelPassword`, and `sentinelTLS`.
+
+### Environment Variables
+
+Choose **ConnString > Environment variable** and enter the variable name. The value can be
+an ioredis connection string, standalone JSON object, cluster startup-node array, or
+Sentinel JSON object.
+
+```bash
+export NODE_RED_REDIS_OPTIONS='{"host":"127.0.0.1","port":6379}'
+```
+
+Environment-variable mode is useful for deployments because secrets stay outside
+`flows.json` and outside exported flow snippets.
+
+## Message Patterns
+
+`redis-in` emits Redis data as Node-RED messages. Pub/sub messages use `msg.topic` and
+`msg.payload`; pattern subscriptions also include `msg.pattern`; stream consumer groups
+include `msg.stream`, `msg.messageId`, and `msg.payload`.
+
+`redis-out` and `redis-command` let incoming messages override configured keys and
+arguments. Use Catch nodes around write-heavy flows; Redis command failures are surfaced
+through Node-RED's normal error path instead of being swallowed.
+
+For advanced commands or Redis modules, prefer `redis-command` before writing a Function
+node. `redis-lua-script` *executes* Lua scripts and Redis Functions, while `FUNCTION *` and
+`SCRIPT *` *management* subcommands run through `redis-command`. For custom client code that
+really needs ioredis directly, use `redis-instance`.
+
+## Work with AI Agent
+
+1. Support Claude and Codex
+2. Install [supoerpowers plugin](https://github.com/obra/superpowers)
+3. Install [codegraph](https://github.com/colbymchenry/codegraph)
+4. Enjoy
+
+## Development And Tests
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run the browser editor suite:
+
+```bash
+npm run test:playwright
+```
+
+Run the full Docker-managed deployment matrix:
+
+```bash
+npm test
+```
+
+The test matrix covers standalone no-auth/auth Redis, Redis Cluster, Redis Sentinel, and
+optional AWS MemoryDB when `MEMORYDB_ENABLED=1` plus endpoint credentials are present in
+the environment. See [`docs/TESTING.md`](docs/TESTING.md) for the Docker boundary and
+[`docs/NODE_GUIDE.md`](docs/NODE_GUIDE.md) plus
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for implementation details.
+
+## License
+
+[MIT](LICENSE)

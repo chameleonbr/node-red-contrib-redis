@@ -1,0 +1,46 @@
+services:
+  redis-7000:
+    image: ${REDIS_TOPOLOGY_IMAGE:-redis:7.2-alpine}
+    network_mode: host
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./redis-7000.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis-7000-data:/data
+
+  redis-7001:
+    image: ${REDIS_TOPOLOGY_IMAGE:-redis:7.2-alpine}
+    network_mode: host
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./redis-7001.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis-7001-data:/data
+
+  cluster-init:
+    image: ${REDIS_TOPOLOGY_IMAGE:-redis:7.2-alpine}
+    network_mode: host
+    depends_on:
+      - redis-7000
+      - redis-7001
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        until redis-cli -h 127.0.0.1 -p 7000 --user node_red -a node-red-pass --no-auth-warning PING >/dev/null 2>&1; do sleep 0.2; done
+        until redis-cli -h 127.0.0.1 -p 7001 --user node_red -a node-red-pass --no-auth-warning PING >/dev/null 2>&1; do sleep 0.2; done
+        redis-cli -h 127.0.0.1 -p 7000 --user node_red -a node-red-pass --no-auth-warning CLUSTER MEET 127.0.0.1 7001 >/dev/null 2>&1 || true
+        redis-cli -h 127.0.0.1 -p 7000 --user node_red -a node-red-pass --no-auth-warning CLUSTER ADDSLOTSRANGE 0 8191 >/dev/null 2>&1 || true
+        redis-cli -h 127.0.0.1 -p 7001 --user node_red -a node-red-pass --no-auth-warning CLUSTER ADDSLOTSRANGE 8192 16383 >/dev/null 2>&1 || true
+        if timeout 40 sh -c 'until redis-cli -h 127.0.0.1 -p 7000 --user node_red -a node-red-pass --no-auth-warning CLUSTER INFO | grep -q "cluster_state:ok"; do sleep 0.5; done'; then
+          exit 0
+        fi
+        redis-cli -h 127.0.0.1 -p 7000 --user node_red -a node-red-pass --no-auth-warning CLUSTER INFO
+        exit 1
+
+volumes:
+  redis-7000-data:
+  redis-7001-data:
